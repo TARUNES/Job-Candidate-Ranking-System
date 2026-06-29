@@ -1,0 +1,5 @@
+sentence-transformers
+pandas
+numpy
+jsonlines
+python-docx
