@@ -441,7 +441,7 @@ def main() -> None:
         )
         results.append({
             "candidate_id": cand["candidate_id"],
-            "score": float(total_scores[i]),
+            "score": round(float(total_scores[i]), 4),
             "reasoning": reasoning,
         })
 
@@ -459,7 +459,7 @@ def main() -> None:
             writer.writerow([
                 entry["candidate_id"],
                 rank,
-                round(entry["score"], 4),
+                entry["score"],
                 entry["reasoning"],
             ])
 
