@@ -130,8 +130,8 @@ def calculate_location_score(
         log.debug("location_score('%s') = 0.60 (mobile/remote)", location)
         return 0.60
 
-    log.debug("location_score('%s') = 0.35 (non-preferred, onsite-only)", location)
-    return 0.35
+    log.debug("location_score('%s') = 0.00 (non-preferred, unwilling to relocate)", location)
+    return 0.0
 
 
 def calculate_platform_signals_score(signals: dict[str, Any]) -> float:
@@ -141,9 +141,9 @@ def calculate_platform_signals_score(signals: dict[str, Any]) -> float:
     Signal weights (sum = 1.0):
       recruiter_response_rate   0.15  — responds to recruiter messages
       interview_completion_rate 0.15  — shows up for scheduled interviews
-      github_activity_score     0.20  — open-source / side-project activity
+      github_activity_score     0.18  — open-source / side-project activity (reduced 2%)
       response_speed            0.15  — derived from avg_response_time_hours
-      skill_assessment_avg      0.20  — mean score across completed assessments
+      skill_assessment_avg      0.22  — mean score across completed assessments (increased 2%)
       offer_acceptance_rate     0.10  — historical reliability on offers
       profile_completeness      0.05  — signals effort and seriousness
 
@@ -175,9 +175,9 @@ def calculate_platform_signals_score(signals: dict[str, Any]) -> float:
     score = (
         0.15 * response_rate
         + 0.15 * interview_rate
-        + 0.20 * github_norm
+        + 0.18 * github_norm
         + 0.15 * response_speed
-        + 0.20 * assessment_avg
+        + 0.22 * assessment_avg
         + 0.10 * offer_rate
         + 0.05 * completeness
     )
