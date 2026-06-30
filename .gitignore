@@ -1,0 +1,30 @@
+# Challenge Data
+__MACOSX/
+[PUB] India_runs_data_and_ai_challenge/
+*.jsonl
+
+# Output
+candidate_ranker/output/
+
+# Python Cache & Env
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.venv/
+pip-log.txt
+pip-delete-this-directory.txt
+.cache/
+.pytest_cache/
+
+# IDE / VS Code
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.swp

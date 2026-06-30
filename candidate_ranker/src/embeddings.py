@@ -13,12 +13,20 @@ class LocalEncoder:
             cls._model = SentenceTransformer('all-MiniLM-L6-v2')
         return cls._model
 
-def get_sentence_embeddings(texts):
+def get_sentence_embeddings(texts, batch_size=128):
     """
     Computes semantic vector embeddings using a local SentenceTransformer model.
+
+    Uses batch_size=128 (up from default 32) for better CPU throughput,
+    and truncates inputs to the model's max sequence length.
     """
     model = LocalEncoder.get_model()
-    return model.encode(texts, convert_to_numpy=True)
+    return model.encode(
+        texts,
+        convert_to_numpy=True,
+        batch_size=batch_size,
+        show_progress_bar=True,
+    )
 
 def compute_cosine_similarity(vec_a, vec_b):
     """

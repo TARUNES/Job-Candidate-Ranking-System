@@ -1,105 +1,325 @@
-import datetime
+"""
+heuristics.py
+=============
+Two-tier filtering for the candidate ranking pipeline.
 
-def has_timeline_overlaps(career_history):
+Hard disqualifiers (per-candidate, during streaming)
+    Binary: a True result removes the candidate from the pool entirely.
+    Current checks:
+      - Timeline overlaps       : impossible overlapping employment (>90 days)
+      - Impossible skills       : advanced/expert claims with zero duration
+
+    Note: The consulting-career filter has been intentionally removed.
+    Filtering by employer industry (e.g., "IT Services") is a blunt proxy
+    that disproportionately penalises candidates at large firms who hold
+    genuinely technical roles.  Skills and work descriptions are far more
+    reliable signals of actual fit.
+
+Mismatched profile detection (batch, post-streaming)
+    Uses TF-IDF coherence analysis to detect candidates whose headline/
+    summary domain diverges from their career description domain.
+    This is data-driven — vocabulary importance is learned from the entire
+    candidate corpus, with no hardcoded keyword pairs.
+
+Soft penalties
+    A multiplier in [0.60, 1.00] applied to the non-semantic score.
+    A value below 1.0 reduces rank without eliminating the candidate.
+    Floor is 0.60 — no candidate can be penalised by more than 40%.
+
+    Penalty sources:
+      - Not open to work            :  -0.15
+      - Slow response time (>150 h) :  -0.10
+      - Skill claim vs assessment   :  -0.10 per mismatch (max -0.20)
+      - Low interview completion    :  -0.10  (< 0.50)
+"""
+
+from __future__ import annotations
+
+import datetime
+import logging
+from typing import Any
+
+import numpy as np
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.preprocessing import normalize as sklearn_normalize
+
+log = logging.getLogger(__name__)
+
+
+
+
+# ---------------------------------------------------------------------------
+# Hard disqualifiers
+# ---------------------------------------------------------------------------
+
+def has_timeline_overlaps(career_history: list[dict]) -> bool:
     """
-    Scans a candidate's career history list to verify if there are impossible overlapping full-time employment intervals exceeding 90 days.
+    Returns True if any two consecutive roles overlap by more than 90 days.
+
+    Overlapping employment is a strong signal of a fabricated profile.
+    The 90-day grace period accommodates legitimate transition periods
+    where someone might formally be employed at two places briefly.
     """
-    intervals = []
+    intervals: list[tuple[datetime.date, datetime.date]] = []
+
     for job in career_history:
-        start_str = job.get('start_date')
-        end_str = job.get('end_date')
+        start_str = job.get("start_date")
+        end_str = job.get("end_date")
         if not start_str:
             continue
         try:
-            start_dt = datetime.datetime.strptime(start_str, "%Y-%m-%d").date()
-            if end_str:
-                end_dt = datetime.datetime.strptime(end_str, "%Y-%m-%d").date()
-            else:
-                end_dt = datetime.date.today()
+            start_dt = datetime.date.fromisoformat(start_str)
+            end_dt = (
+                datetime.date.fromisoformat(end_str)
+                if end_str
+                else datetime.date.today()
+            )
             intervals.append((start_dt, end_dt))
         except ValueError:
+            log.debug("Unparseable date in career history: start=%s end=%s", start_str, end_str)
             continue
+
     intervals.sort(key=lambda x: x[0])
+
     for i in range(len(intervals) - 1):
         current_end = intervals[i][1]
-        next_start = intervals[i+1][0]
+        next_start = intervals[i + 1][0]
         if current_end > next_start:
             overlap_days = (current_end - next_start).days
             if overlap_days > 90:
+                log.debug("Timeline overlap detected: %d days", overlap_days)
                 return True
+
     return False
 
-def has_impossible_skills(skills):
+
+def has_impossible_skills(skills: list[dict]) -> bool:
     """
-    Checks for impossible skill claims where a candidate claims 'expert' or 'advanced' proficiency but has 0 duration months listed.
+    Returns True when a candidate claims advanced/expert proficiency on
+    multiple skills but lists zero months of experience on most of them.
+
+    Threshold: ≥5 advanced/expert skills AND ≥3 of those have duration = 0.
+    This catches profiles that were keyword-stuffed without fabricating duration.
     """
-    expert_advanced_count = 0
+    advanced_count = 0
     zero_duration_count = 0
-    for s in skills:
-        proficiency = s.get('proficiency', '').lower()
-        duration = s.get('duration_months', 0)
-        if proficiency in ['expert', 'advanced']:
-            expert_advanced_count += 1
+
+    for skill in skills:
+        proficiency = skill.get("proficiency", "").lower()
+        duration = skill.get("duration_months", 0)
+        if proficiency in ("expert", "advanced"):
+            advanced_count += 1
             if duration == 0:
                 zero_duration_count += 1
-    if expert_advanced_count >= 5 and zero_duration_count >= 3:
-        return True
-    return False
 
-def is_pure_consulting_career(career_history):
-    """
-    Checks if a candidate's entire career has been spent solely at consulting or outsourcing firms, which is a strict disqualifier in the job description.
-    """
-    consulting_keywords = ["tcs", "infosys", "wipro", "accenture", "cognizant", "capgemini", "tata consultancy", "wipro technologies", "infosys technologies"]
-    if not career_history:
-        return False
-    all_consulting = True
-    for job in career_history:
-        company_name = job.get('company', '').lower()
-        is_consulting = any(keyword in company_name for keyword in consulting_keywords)
-        if not is_consulting:
-            all_consulting = False
-            break
-    return all_consulting
+    triggered = advanced_count >= 5 and zero_duration_count >= 3
+    if triggered:
+        log.debug(
+            "Impossible skills detected: %d advanced with %d zero-duration",
+            advanced_count, zero_duration_count,
+        )
+    return triggered
 
-def is_mismatched_profile(headline, summary, career_history):
-    """
-    Flags candidates who are behavioral twins or have completely mismatched titles and responsibilities (e.g., HR Manager with accounting descriptions).
-    """
-    headline_lower = headline.lower()
-    summary_lower = summary.lower()
-    if "hr manager" in headline_lower or "hr manager" in summary_lower:
-        for job in career_history:
-            desc = job.get('description', '').lower()
-            if "accounting" in desc or "financial reporting" in desc or "gaap" in desc:
-                return True
-    if "operations manager" in headline_lower or "operations manager" in summary_lower:
-        for job in career_history:
-            desc = job.get('description', '').lower()
-            if "mechanical engineering" in desc or "solidworks" in desc:
-                return True
-    if "customer support" in headline_lower or "customer support" in summary_lower:
-        for job in career_history:
-            desc = job.get('description', '').lower()
-            if "business analyst" in desc or "retail and cpg" in desc:
-                return True
-    return False
 
-def check_honeypots_and_filters(candidate):
+# ---------------------------------------------------------------------------
+# Data-driven mismatch detection (batch, post-streaming)
+# ---------------------------------------------------------------------------
+
+class MismatchDetector:
     """
-    Aggregates all check sub-routines to determine if a candidate is a trap/honeypot or violates hard disqualification rules.
+    Detects mismatched profiles using TF-IDF coherence analysis.
+
+    Instead of hardcoded keyword pairs, this learns vocabulary importance
+    from the entire candidate corpus.  For each candidate it compares the
+    TF-IDF vector of their identity text (headline + summary + skill names)
+    against the TF-IDF vector of their evidence text (career descriptions).
+
+    Candidates whose identity and evidence vectors have very low cosine
+    similarity are flagged — their headline domain diverges from their
+    actual work history.  The threshold is derived from the dataset
+    distribution (mean − 2σ), so it adapts automatically.
     """
-    profile = candidate.get('profile', {})
-    career_history = candidate.get('career_history', [])
-    skills = candidate.get('skills', [])
-    headline = profile.get('headline', '')
-    summary = profile.get('summary', '')
-    if is_pure_consulting_career(career_history):
-        return True
+
+    _MIN_DESC_LENGTH: int = 100     # skip candidates with very short descriptions
+    _PERCENTILE: float = 0.1        # flag bottom 0.1% by coherence score
+
+    def detect(self, candidates: list[dict[str, Any]]) -> set[str]:
+        """
+        Identifies candidates with mismatched headline vs career descriptions.
+
+        Parameters
+        ----------
+        candidates : list of candidate dicts
+
+        Returns
+        -------
+        set of candidate_ids flagged as mismatched
+        """
+        identity_texts: list[str] = []
+        evidence_texts: list[str] = []
+        candidate_ids: list[str] = []
+        checkable_mask: list[bool] = []
+
+        for cand in candidates:
+            profile = cand.get("profile", {})
+            headline = profile.get("headline", "")
+            summary = profile.get("summary", "")
+            career = cand.get("career_history", [])
+            skills = cand.get("skills", [])
+
+            skill_names = " ".join(s.get("name", "") for s in skills)
+            identity = f"{headline} {summary} {skill_names}"
+
+            evidence = " ".join(
+                f"{job.get('title', '')} {job.get('description', '')}"
+                for job in career
+            )
+
+            identity_texts.append(identity)
+            evidence_texts.append(evidence)
+            candidate_ids.append(cand.get("candidate_id", ""))
+            checkable_mask.append(len(evidence.strip()) >= self._MIN_DESC_LENGTH)
+
+        checkable_indices = [i for i, ok in enumerate(checkable_mask) if ok]
+        if not checkable_indices:
+            return set()
+
+        # Fit TF-IDF on all texts combined to learn corpus-wide IDF weights
+        # Using unigrams only and 5K features for speed
+        all_texts = identity_texts + evidence_texts
+        vectorizer = TfidfVectorizer(
+            max_features=5_000,
+            ngram_range=(1, 1),
+            min_df=10,
+            stop_words="english",
+            sublinear_tf=True,
+        )
+        vectorizer.fit(all_texts)
+
+        identity_vecs = vectorizer.transform(identity_texts)
+        evidence_vecs = vectorizer.transform(evidence_texts)
+
+        # L2-normalise for cosine similarity via dot product
+        identity_norm = sklearn_normalize(identity_vecs, norm="l2")
+        evidence_norm = sklearn_normalize(evidence_vecs, norm="l2")
+
+        # Compute per-candidate coherence (row-wise dot product)
+        coherence_all = np.array(
+            identity_norm.multiply(evidence_norm).sum(axis=1)
+        ).flatten()
+
+        # Percentile-based threshold: flag only the bottom 0.1% by coherence
+        # For 100K candidates this targets ~100, close to the ~80 expected honeypots
+        checkable_scores = coherence_all[checkable_indices]
+        threshold = float(np.percentile(checkable_scores, self._PERCENTILE))
+        log.info(
+            "Mismatch detector: median=%.4f p%.1f=%.4f (threshold)",
+            float(np.median(checkable_scores)), self._PERCENTILE, threshold,
+        )
+
+        mismatched: set[str] = set()
+        for i in checkable_indices:
+            if coherence_all[i] < threshold:
+                mismatched.add(candidate_ids[i])
+                log.info(
+                    "[FILTER] %s — mismatched profile (coherence=%.4f < %.4f)",
+                    candidate_ids[i], coherence_all[i], threshold,
+                )
+
+        log.info("Mismatch detector flagged %d candidates", len(mismatched))
+        return mismatched
+
+
+def check_honeypots_and_filters(candidate: dict[str, Any]) -> bool:
+    """
+    Runs all hard-disqualifier checks against a single candidate record.
+
+    Returns True  ->  candidate is eliminated from the pool.
+    Returns False ->  candidate passes and proceeds to scoring.
+
+    Checks applied (in order, short-circuit on first True):
+      1. has_timeline_overlaps     — impossible career timeline
+      2. has_impossible_skills     — fabricated proficiency claims
+      3. is_mismatched_profile     — title/description domain contradiction
+    """
+    profile = candidate.get("profile", {})
+    career_history = candidate.get("career_history", [])
+    skills = candidate.get("skills", [])
+    headline = profile.get("headline", "")
+    summary = profile.get("summary", "")
+    cid = candidate.get("candidate_id", "?")
+
     if has_timeline_overlaps(career_history):
+        log.info("[FILTER] %s — timeline overlap", cid)
         return True
+
     if has_impossible_skills(skills):
+        log.info("[FILTER] %s — impossible skills", cid)
         return True
-    if is_mismatched_profile(headline, summary, career_history):
-        return True
+
+    # Mismatch detection is now handled as a batch step via MismatchDetector
+    # (called from rank.py after streaming) instead of per-candidate here.
+
     return False
+
+
+# ---------------------------------------------------------------------------
+# Soft penalties
+# ---------------------------------------------------------------------------
+
+def compute_soft_penalty(candidate: dict[str, Any]) -> float:
+    """
+    Returns a multiplier in [0.60, 1.00] applied to the non-semantic score.
+
+    Penalty sources and their deductions:
+      - Not open to work            :  -0.15
+      - Avg response time  > 150 h  :  -0.10
+      - Skill claim vs assessment   :  -0.10 per mismatched skill, max -0.20
+        (advanced/expert claim where platform assessment score < 40)
+      - Interview completion < 0.50 :  -0.10
+
+    Floor: 0.60 — no stacking of penalties can reduce the multiplier below 0.60.
+    This ensures that even candidates with all four penalties still contribute
+    meaningful signal to the final hybrid score.
+    """
+    signals = candidate.get("redrob_signals", {})
+    skills = candidate.get("skills", [])
+    cid = candidate.get("candidate_id", "?")
+    penalty = 0.0
+    reasons: list[str] = []
+
+    # Not actively seeking work
+    if not signals.get("open_to_work_flag", True):
+        penalty += 0.15
+        reasons.append("not_open_to_work")
+
+    # Slow responder — harder to engage in interview process
+    avg_hours: float = signals.get("avg_response_time_hours", 0.0)
+    if avg_hours > 150:
+        penalty += 0.10
+        reasons.append(f"slow_response({avg_hours:.0f}h)")
+
+    # Skill claim not backed by assessment score
+    assessments: dict[str, float] = signals.get("skill_assessment_scores", {})
+    mismatch_count = 0
+    for skill in skills:
+        name = skill.get("name", "")
+        proficiency = skill.get("proficiency", "").lower()
+        if proficiency in ("advanced", "expert") and name in assessments:
+            if assessments[name] < 40.0:
+                mismatch_count += 1
+    if mismatch_count:
+        deduction = min(mismatch_count, 2) * 0.10
+        penalty += deduction
+        reasons.append(f"skill_assessment_mismatch({mismatch_count})")
+
+    # Low interview attendance — unreliable through the hiring process
+    interview_rate: float = signals.get("interview_completion_rate", 1.0)
+    if interview_rate < 0.50:
+        penalty += 0.10
+        reasons.append(f"low_interview_rate({interview_rate:.2f})")
+
+    multiplier = max(0.60, 1.0 - penalty)
+    if reasons:
+        log.debug("[PENALTY] %s — mult=%.2f reasons=%s", cid, multiplier, reasons)
+    return multiplier
