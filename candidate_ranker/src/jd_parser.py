@@ -75,7 +75,7 @@ class _LLMSingleton:
 
         try:
             from transformers import T5ForConditionalGeneration, T5Tokenizer
-            model_name = "google/flan-t5-small"
+            model_name = "google/flan-t5-base"
             log.info("Loading local LLM for JD parsing: %s", model_name)
             cls._tokeniser = T5Tokenizer.from_pretrained(model_name)
             cls._model = T5ForConditionalGeneration.from_pretrained(model_name)
@@ -174,10 +174,12 @@ _TECH_VOCAB: frozenset[str] = frozenset({
     "finetuning", "pretraining", "training", "serving",
     "ray", "triton", "onnx", "tensorrt",
     "git", "ci", "cd", "github", "gitlab", "jenkins",
-    "sklearn", "scikit", "xgboost", "lightgbm", "catboost",
+    "sklearn", "scikit", "scikit-learn", "xgboost", "lightgbm", "catboost",
     "pandas", "numpy", "scipy", "matplotlib", "plotly",
     "bentoml", "seldon", "torchserve", "sagemaker",
     "dbt", "prefect", "luigi",
+    "re-ranking", "embeddings-based", "vector-search",
+    "learning-to-rank", "hybrid-search", "text-to-speech", "speech-to-text",
 })
 
 # Common stop-words filtered during regex skill extraction
@@ -319,77 +321,72 @@ class JDParser:
         profile = JDProfile(raw_text=jd_text)
 
         # ── Skills ────────────────────────────────────────────────────────────
-        req_raw  = cls._llm_extract_skills(jd_text, required=True)
-        pref_raw = cls._llm_extract_skills(jd_text, required=False)
+        llm_req  = cls._llm_extract_skills(jd_text, required=True)
+        llm_pref = cls._llm_extract_skills(jd_text, required=False)
 
-        if req_raw:
-            log.info(
-                "Skills (LLM): %d required, %d preferred",
-                len(req_raw), len(pref_raw),
-            )
-        else:
-            log.info("Skills (LLM): empty — using regex fallback")
-            req_text, pref_text = cls._split_sections(jd_text)
-            req_raw  = cls._regex_extract_skills(req_text)
-            pref_raw = cls._regex_extract_skills(
-                pref_text, exclude={s.lower() for s in req_raw}
-            )
-            log.info(
-                "Skills (regex fallback): %d required, %d preferred",
-                len(req_raw), len(pref_raw),
-            )
+        req_text, pref_text = cls._split_sections(jd_text)
+        reg_req  = cls._regex_extract_skills(req_text)
+        reg_pref = cls._regex_extract_skills(
+            pref_text, exclude={s.lower() for s in reg_req}
+        )
 
-        profile.required_skills  = req_raw
-        profile.preferred_skills = pref_raw
+        log.info("Skills (LLM): Required: %s | Preferred: %s", llm_req, llm_pref)
+        log.info("Skills (Regex): Required: %s | Preferred: %s", reg_req, reg_pref)
+
+        # Union of LLM and Regex skills to ensure maximum tech vocabulary coverage
+        required_union = list(dict.fromkeys(llm_req + reg_req))
+        preferred_union = list(dict.fromkeys(llm_pref + reg_pref))
+        # Deduplicate preferred skills from required skills
+        required_lower = {s.lower() for s in required_union}
+        preferred_union = [s for s in preferred_union if s.lower() not in required_lower]
+
+        profile.required_skills  = required_union
+        profile.preferred_skills = preferred_union
 
         # ── Experience ────────────────────────────────────────────────────────
-        min_yr, max_yr, ideal_yr = cls._llm_extract_experience(jd_text)
-        if ideal_yr > 0:
-            log.info(
-                "Experience (LLM): %.0f–%.0f yr, ideal=%.1f",
-                min_yr, max_yr, ideal_yr,
-            )
+        llm_min_yr, llm_max_yr, llm_ideal_yr = cls._llm_extract_experience(jd_text)
+        reg_min_yr, reg_max_yr, reg_ideal_yr = cls._regex_extract_experience(jd_text)
+
+        log.info("Experience (LLM): min=%.1f, max=%.1f, ideal=%.1f", llm_min_yr, llm_max_yr, llm_ideal_yr)
+        log.info("Experience (Regex): min=%.1f, max=%.1f, ideal=%.1f", reg_min_yr, reg_max_yr, reg_ideal_yr)
+
+        if llm_ideal_yr > 0:
+            profile.min_years   = llm_min_yr
+            profile.max_years   = llm_max_yr
+            profile.ideal_years = llm_ideal_yr
         else:
-            log.info("Experience (LLM): no result — using regex fallback")
-            min_yr, max_yr, ideal_yr = cls._regex_extract_experience(jd_text)
-            log.info(
-                "Experience (regex fallback): %.0f–%.0f yr, ideal=%.1f",
-                min_yr, max_yr, ideal_yr,
-            )
-        profile.min_years   = min_yr
-        profile.max_years   = max_yr
-        profile.ideal_years = ideal_yr
+            profile.min_years   = reg_min_yr
+            profile.max_years   = reg_max_yr
+            profile.ideal_years = reg_ideal_yr
 
         # ── Location + Remote ────────────────────────────────────────────────
-        locs = cls._llm_extract_locations(jd_text)
-        if locs:
-            log.info("Locations (LLM): %s", locs)
-        else:
-            log.info("Locations (LLM): empty — using regex fallback")
-            locs = cls._regex_extract_locations(jd_text)
-            log.info("Locations (regex fallback): %s", locs)
-        profile.preferred_locations = locs
+        llm_locs = cls._llm_extract_locations(jd_text)
+        reg_locs = cls._regex_extract_locations(jd_text)
+
+        log.info("Locations (LLM): %s", llm_locs)
+        log.info("Locations (Regex): %s", reg_locs)
+
+        profile.preferred_locations = llm_locs if llm_locs else reg_locs
         profile.remote_ok = cls._extract_remote(jd_text)
         log.info("Remote OK: %s", profile.remote_ok)
 
         # ── Education ────────────────────────────────────────────────────────
         profile.required_degrees = cls._regex_extract_degrees(jd_text)
-        log.info("Degrees (regex): %s", profile.required_degrees)
+        log.info("Degrees (Regex): %s", profile.required_degrees)
 
         llm_fields = cls._llm_extract_fields(jd_text)
-        if llm_fields:
-            log.info("Fields of study (LLM): %s", llm_fields)
-            profile.required_fields = llm_fields
-        else:
-            log.info("Fields of study (LLM): empty — using regex fallback")
-            profile.required_fields = cls._regex_extract_fields(jd_text)
-            log.info("Fields of study (regex fallback): %s", profile.required_fields)
+        reg_fields = cls._regex_extract_fields(jd_text)
+
+        log.info("Fields of study (LLM): %s", llm_fields)
+        log.info("Fields of study (Regex): %s", reg_fields)
+
+        profile.required_fields = llm_fields if llm_fields else reg_fields
 
         profile.required_certs = cls._regex_extract_certs(jd_text)
-        log.info("Certifications (regex): %d found", len(profile.required_certs))
+        log.info("Certifications (Regex): %s", profile.required_certs)
 
         log.info(
-            "JDParser: %d required skills, %d preferred, "
+            "JDParser Final Output: %d required skills, %d preferred, "
             "exp=%.0f–%.0f yr (ideal %.1f), locations=%s, remote=%s, "
             "degrees=%s, certs=%d",
             len(profile.required_skills),
@@ -405,82 +402,91 @@ class JDParser:
         return profile
 
     # ---------------------------------------------------------------------------
+    # ---------------------------------------------------------------------------
     # LLM-based extractors
     # ---------------------------------------------------------------------------
 
     @classmethod
+    def _get_section_text(cls, text: str, keywords: list[str], max_chars: int = 1500) -> str:
+        """
+        Finds a section in the text that starts with any of the keywords and returns it.
+        """
+        lines = text.splitlines()
+        start_idx = -1
+        for i, line in enumerate(lines):
+            stripped = line.lower()
+            if any(kw in stripped for kw in keywords) and len(stripped) < 100:
+                start_idx = i
+                break
+        if start_idx != -1:
+            return "\n".join(lines[start_idx:])[:max_chars]
+        return text[:max_chars]
+
+    @classmethod
     def _llm_extract_skills(cls, jd_text: str, *, required: bool) -> list[str]:
         """
-        Uses flan-t5-small to extract required or preferred skills from the JD.
-
-        The model is prompted to return a comma-separated list of skill names.
-        The result is post-filtered to remove tokens that appear verbatim
-        nowhere in the JD (hallucination guard).
-
-        Parameters
-        ----------
-        jd_text  : Full JD text.
-        required : If True, extract required skills; otherwise preferred.
-
-        Returns
-        -------
-        Deduplicated list of skill name strings, or [] on failure.
+        Uses flan-t5-base to extract required or preferred skills from the JD.
         """
-        skill_type = "required / must-have" if required else "preferred / nice-to-have"
-        # Truncate JD to keep prompt within model's 512-token input limit
-        jd_snippet = jd_text[:1500]
+        if required:
+            keywords = ["absolutely need", "must-have", "required skills", "essential", "requirements", "skills inventory"]
+            skill_type = "required"
+        else:
+            keywords = ["like you to have", "nice-to-have", "preferred", "bonus", "plus", "desirable"]
+            skill_type = "preferred"
+
+        section = cls._get_section_text(jd_text, keywords=keywords)
         prompt = (
-            f"Extract the {skill_type} technical skills from this job description. "
-            f"Return only a comma-separated list of skill names. "
-            f"Job description:\n{jd_snippet}"
+            f"Identify all the {skill_type} technical skills and tools mentioned in this text. "
+            f"Return only a comma-separated list of names. "
+            f"Text:\n{section}"
         )
         raw = _LLMSingleton.generate(prompt, max_new_tokens=100)
-        if not raw:
-            return []
-
+        # Tokenise the LLM's raw output using regex to split into words
+        raw_tokens = re.findall(r"[A-Za-z][A-Za-z0-9+#\-\.]*", raw)
         jd_lower = jd_text.lower()
         skills: list[str] = []
-        seen: set[str] = set()
+        seen_lower: set[str] = set()
 
-        for token in raw.split(","):
-            token = token.strip().strip(".")
-            lower = token.lower()
-            # Hallucination guard: skill must appear in the JD text
-            if (
-                token
-                and len(token) >= cls._MIN_SKILL_LEN
-                and lower not in seen
-                and lower not in _STOP_WORDS
-                and lower in jd_lower
-            ):
-                seen.add(lower)
-                skills.append(token)
+        for tok in raw_tokens:
+            tok = tok.strip(".-")
+            lower = tok.lower()
+            if not tok or lower in seen_lower or lower in _STOP_WORDS:
+                continue
+            if len(tok) < cls._MIN_SKILL_LEN:
+                continue
+            if lower not in jd_lower:
+                continue
 
-        log.debug(
-            "LLM %s skills: %s",
-            "required" if required else "preferred",
-            skills,
-        )
+            is_known_tech = lower in _TECH_VOCAB
+            # camelCase (contains lowercase followed by uppercase, e.g. PyTorch, LangChain, LlamaIndex)
+            is_camel_case = (
+                not tok.islower() 
+                and not tok.isupper() 
+                and any(c.isupper() for c in tok[1:])
+            )
+            # contains symbols like +, #, . (e.g. C++, C#, Next.js)
+            has_special_chars = any(c in tok for c in ["+", "#", "."])
+
+            if is_known_tech or is_camel_case or has_special_chars:
+                seen_lower.add(lower)
+                skills.append(tok)
+
+        log.debug("LLM %s skills: %s", skill_type, skills)
         return skills
 
     @classmethod
     def _llm_extract_experience(cls, jd_text: str) -> tuple[float, float, float]:
         """
-        Uses flan-t5-small to extract the experience range from the JD.
-
-        The model is prompted for a plain "min,max" answer.  The result
-        is parsed and validated; returns (0, 0, 0) to signal fallback needed.
-
-        Returns
-        -------
-        Tuple of (min_years, max_years, ideal_years) or (0, 0, 0) on failure.
+        Uses flan-t5-base to extract the experience range from the JD.
         """
-        jd_snippet = jd_text[:1500]
+        # Focus on the experience section or the beginning metadata
+        keywords = ["experience required", "experience", "years of experience", "what we mean"]
+        section = cls._get_section_text(jd_text, keywords=keywords, max_chars=800)
+        
         prompt = (
-            "From this job description, extract the required years of experience. "
-            "Reply with only two numbers separated by a comma: minimum years, maximum years. "
-            "If only one number is given write it twice. "
-            f"Job description:\n{jd_snippet}"
+            "From this text, extract the required years of experience range. "
+            "Reply with only two numbers separated by a comma (e.g. 5,9). "
+            f"Text:\n{section}"
         )
         raw = _LLMSingleton.generate(prompt, max_new_tokens=16)
         if not raw:
@@ -506,33 +512,31 @@ class JDParser:
     @classmethod
     def _llm_extract_locations(cls, jd_text: str) -> list[str]:
         """
-        Uses flan-t5-small to extract preferred work locations from the JD.
-
-        The model is prompted to return a comma-separated list of city or
-        country names.  Results are validated against the JD text to prevent
-        hallucination.
-
-        Returns
-        -------
-        List of location strings (title-cased), or [] on failure.
+        Uses flan-t5-base to extract preferred work locations from the JD.
         """
-        jd_snippet = jd_text[:1500]
+        # Location metadata is always at the top of the file
+        section = jd_text[:800]
         prompt = (
-            "From this job description, extract the preferred work locations "
-            "(cities or countries). "
+            "From this text, extract the preferred work locations (cities or countries). "
             "Return only a comma-separated list of location names. "
-            f"Job description:\n{jd_snippet}"
+            f"Text:\n{section}"
         )
         raw = _LLMSingleton.generate(prompt, max_new_tokens=64)
         if not raw:
             return []
 
+        # Split raw by comma, slash, "or", or "and"
+        tokens = []
+        for part in re.split(r",|/|\s+or\s+|\s+and\s+", raw):
+            part = part.strip().strip(".")
+            if part:
+                tokens.append(part)
+
         jd_lower = jd_text.lower()
         locs: list[str] = []
         seen: set[str] = set()
 
-        for token in raw.split(","):
-            token = token.strip().strip(".")
+        for token in tokens:
             lower = token.lower()
             # Hallucination guard: location must appear in the JD text
             if (
@@ -550,17 +554,14 @@ class JDParser:
     @classmethod
     def _llm_extract_fields(cls, jd_text: str) -> list[str]:
         """
-        Uses flan-t5-small to extract required fields of study from the JD.
-
-        Returns
-        -------
-        List of field of study strings, or [] on failure / empty response.
+        Uses flan-t5-base to extract required fields of study from the JD.
         """
-        jd_snippet = jd_text[:1500]
+        keywords = ["absolutely need", "must-have", "required skills", "essential", "requirements", "skills inventory", "education"]
+        section = cls._get_section_text(jd_text, keywords=keywords)
         prompt = (
-            "From this job description, extract the required fields of study or academic disciplines. "
-            "Return only a comma-separated list. "
-            f"Job description:\n{jd_snippet}"
+            "From this text, extract the required fields of study or academic disciplines. "
+            "Return only a comma-separated list of names. "
+            f"Text:\n{section}"
         )
         raw = _LLMSingleton.generate(prompt, max_new_tokens=64)
         if not raw:
@@ -655,20 +656,24 @@ class JDParser:
         skills: list[str] = []
 
         for tok in raw_tokens:
+            tok = tok.strip(".-")
             lower = tok.lower()
-            if lower in seen_lower or lower in _STOP_WORDS:
+            if not tok or lower in seen_lower or lower in _STOP_WORDS:
                 continue
             if len(tok) < cls._MIN_SKILL_LEN:
                 continue
 
             is_known_tech = lower in _TECH_VOCAB
-            is_proper_tech = (
-                len(tok) >= 3
-                and (tok[0].isupper() or tok[0].isdigit())
-                and not tok.islower()
+            # camelCase (contains lowercase followed by uppercase, e.g. PyTorch, LangChain, LlamaIndex)
+            is_camel_case = (
+                not tok.islower() 
+                and not tok.isupper() 
+                and any(c.isupper() for c in tok[1:])
             )
+            # contains symbols like +, #, . (e.g. C++, C#, Next.js)
+            has_special_chars = any(c in tok for c in ["+", "#", "."])
 
-            if is_known_tech or is_proper_tech:
+            if is_known_tech or is_camel_case or has_special_chars:
                 seen_lower.add(lower)
                 skills.append(tok)
 
