@@ -3,24 +3,27 @@ rank.py
 =======
 CLI entry-point for the Intelligent Candidate Discovery & Ranking System.
 
-Optimized two-stage pipeline
+Fully dynamic two-stage pipeline — all scoring parameters are derived
+from the uploaded Job Description at runtime.
+
     1.  Parse CLI arguments
-    2.  Load and embed the Job Description (JD)
-    3.  Stream candidate records from JSONL or JSONL.GZ
-    4.  Schema-validate each record  — skip malformed ones
-    5.  Hard-filter via heuristics   — skip disqualified ones
-    6.  Batch TF-IDF mismatch detection — data-driven honeypot filter
-    7.  Pre-rank ALL valid candidates by non-semantic score (instant)
-    8.  Shortlist top-N by non-semantic score (default 2000)
-    9.  Batch-encode only the shortlisted candidates
-   10.  Compute hybrid score per shortlisted candidate:
+    2.  Load and parse the Job Description (JD) → JDProfile
+    3.  Embed the JD text for semantic scoring
+    4.  Stream candidate records from JSONL or JSONL.GZ
+    5.  Schema-validate each record  — skip malformed ones
+    6.  Hard-filter via heuristics   — skip disqualified ones
+    7.  Batch TF-IDF mismatch detection — data-driven honeypot filter
+    8.  Pre-rank ALL valid candidates by non-semantic score (instant)
+    9.  Shortlist top-N by non-semantic score (default 2000)
+   10.  Batch-encode only the shortlisted candidates
+   11.  Compute hybrid score per shortlisted candidate:
             final = 0.45 * semantic + 0.55 * (non_semantic * soft_penalty)
-   11.  Sort descending by score, emit top 100 to submission.csv
+   12.  Sort descending by score, emit top 100 to submission.csv
 
 Usage
-    python rank.py \
-        --candidates path/to/candidates.jsonl(.gz) \
-        --jd         path/to/job_description.docx \
+    python rank.py \\
+        --candidates path/to/candidates.jsonl(.gz) \\
+        --jd         path/to/job_description.docx \\
         --out        path/to/submission.csv
 
 Compute constraints (as per hackathon spec)
@@ -35,7 +38,6 @@ from __future__ import annotations
 import csv
 import logging
 import os
-import re
 import sys
 import time
 from typing import Any
@@ -47,6 +49,7 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from src.data_loader import load_docx_text, stream_candidates
 from src.embeddings import get_sentence_embeddings
 from src.heuristics import MismatchDetector, check_honeypots_and_filters, compute_soft_penalty
+from src.jd_parser import JDParser, JDProfile
 from src.schema_validator import validate_candidate
 from src.scoring import compute_non_semantic_score
 
@@ -70,58 +73,45 @@ log = logging.getLogger(__name__)
 _SEMANTIC_WEIGHT: float = 0.45
 _NON_SEMANTIC_WEIGHT: float = 0.55
 _SHORTLIST_SIZE: int = 2000          # Only embed the top-N by non-semantic score
-_MAX_CANDIDATE_TEXT_LEN: int = 500   # Truncate candidate text for faster encoding
+_MAX_CANDIDATE_TEXT_LEN: int = 600   # Truncate candidate text for faster encoding
 
 
 # ---------------------------------------------------------------------------
-# JD stop-words (filtered out during keyword extraction)
-# ---------------------------------------------------------------------------
-
-_STOP_WORDS: frozenset[str] = frozenset({
-    "the", "a", "an", "and", "or", "of", "in", "to", "for", "with",
-    "is", "are", "be", "on", "at", "by", "we", "you", "will", "our",
-    "have", "has", "that", "this", "their", "from", "as", "not", "but",
-    "can", "your", "it", "its", "about", "more", "than", "all", "any",
-    "who", "what", "how", "when", "where", "which", "such", "also",
-    "must", "should", "would", "may", "each", "both", "very", "just",
-})
-
-_MIN_KEYWORD_LEN: int = 3
-
-
-# ---------------------------------------------------------------------------
-# Text extraction
+# Text extraction (full — no artificial caps)
 # ---------------------------------------------------------------------------
 
 def extract_candidate_text(candidate: dict[str, Any]) -> str:
     """
-    Builds a compact text string from a candidate record for semantic embedding.
+    Builds a rich text string from a candidate record for semantic embedding.
 
-    Optimized for speed: limits to 2 career roles, 8 skills, and truncates
-    the final text to _MAX_CANDIDATE_TEXT_LEN characters.  The model's
-    tokenizer will further truncate, but shorter inputs encode faster.
-
-    Includes (in order):
+    Includes all available profile signals (not artificially capped):
       - Headline and professional summary
-      - Descriptions from the 2 most recent career roles (with title prefix)
-      - Top 8 skills formatted as "SkillName (proficiency)"
-      - Education field of study
-      - Certification names
+      - All career role titles + descriptions (not capped at 2)
+      - All skills formatted as "SkillName (proficiency)"
+      - All education entries (degree + field of study)
+      - All certification names
+      - Language proficiency entries
+
+    The final text is truncated to _MAX_CANDIDATE_TEXT_LEN characters
+    before passing to the sentence encoder. The model's tokeniser will
+    further truncate, but shorter inputs encode faster.
     """
     profile = candidate["profile"]
     headline: str = profile["headline"]
     summary: str = profile["summary"]
 
+    # All career roles (was: first 2 only)
     history_parts: list[str] = []
-    for job in candidate.get("career_history", [])[:2]:  # was 3
+    for job in candidate.get("career_history", []):
         title = job.get("title", "")
         desc = job.get("description", "")
         if desc:
             history_parts.append(f"{title}: {desc}")
 
+    # All skills (was: top 8 only)
     skill_parts: list[str] = [
         f"{s['name']} ({s['proficiency']})"
-        for s in candidate.get("skills", [])[:8]  # was unlimited
+        for s in candidate.get("skills", [])
         if s.get("name")
     ]
 
@@ -137,6 +127,12 @@ def extract_candidate_text(candidate: dict[str, Any]) -> str:
         if c.get("name")
     ]
 
+    lang_parts: list[str] = [
+        f"{l['language']} ({l['proficiency']})"
+        for l in candidate.get("languages", [])
+        if l.get("language")
+    ]
+
     sections = [
         headline,
         summary,
@@ -144,31 +140,10 @@ def extract_candidate_text(candidate: dict[str, Any]) -> str:
         "Skills: " + ", ".join(skill_parts) if skill_parts else "",
         "Education: " + ". ".join(edu_parts) if edu_parts else "",
         "Certifications: " + ". ".join(cert_parts) if cert_parts else "",
+        "Languages: " + ", ".join(lang_parts) if lang_parts else "",
     ]
     text = " ".join(s for s in sections if s).strip()
     return text[:_MAX_CANDIDATE_TEXT_LEN]
-
-
-# ---------------------------------------------------------------------------
-# JD keyword extraction (used only for reasoning generation)
-# ---------------------------------------------------------------------------
-
-def extract_jd_keywords(jd_text: str) -> frozenset[str]:
-    """
-    Extracts a deduplicated set of meaningful tokens from the JD text.
-
-    Tokens shorter than _MIN_KEYWORD_LEN or in _STOP_WORDS are discarded.
-    The returned set is lowercased for case-insensitive matching against
-    candidate skill names in select_reasoning().
-    """
-    tokens = re.findall(r"[a-zA-Z][a-zA-Z0-9+#\-\.]*", jd_text)
-    keywords: set[str] = set()
-    for tok in tokens:
-        lower = tok.lower()
-        if len(lower) >= _MIN_KEYWORD_LEN and lower not in _STOP_WORDS:
-            keywords.add(lower)
-    log.info("JD keyword extraction: %d unique tokens", len(keywords))
-    return frozenset(keywords)
 
 
 # ---------------------------------------------------------------------------
@@ -179,22 +154,18 @@ def select_reasoning(
     candidate: dict[str, Any],
     semantic_score: float,
     total_score: float,
-    jd_keywords: frozenset[str],
+    jd_profile: JDProfile,
 ) -> str:
     """
     Generates a 1–2 sentence reasoning string grounded in the candidate's
-    actual profile data and the JD keyword set.
+    actual profile data and the JD's required/preferred skills.
 
     Logic:
-      1.  Find which candidate skills appear in the JD keyword set.
+      1.  Find which candidate skills appear in the JD's required skills first,
+          then preferred skills (structured match, not just keyword overlap).
       2.  If none match, fall back to the top-3 skills by endorsement count.
       3.  Choose tone (strong / moderate / lower) based on total_score.
       4.  Note unavailability or relocation when relevant.
-
-    The reasoning is intentionally data-driven so that:
-      - Every claim corresponds to something in the profile (no hallucination).
-      - Tone is consistent with the numeric rank.
-      - Different candidates produce substantively different text.
     """
     profile = candidate["profile"]
     signals = candidate["redrob_signals"]
@@ -205,11 +176,24 @@ def select_reasoning(
     open_to_work: bool = signals["open_to_work_flag"]
     willing_to_relocate: bool = signals["willing_to_relocate"]
 
-    # Identify JD-relevant skills
+    # Identify JD-relevant skills — required first, then preferred
     candidate_skills = [
         s["name"] for s in candidate.get("skills", []) if s.get("name")
     ]
-    matched_skills = [s for s in candidate_skills if s.lower() in jd_keywords]
+    candidate_skills_lower = {s.lower(): s for s in candidate_skills}
+
+    matched_required = [
+        candidate_skills_lower[s.lower()]
+        for s in jd_profile.required_skills
+        if s.lower() in candidate_skills_lower
+    ]
+    matched_preferred = [
+        candidate_skills_lower[s.lower()]
+        for s in jd_profile.preferred_skills
+        if s.lower() in candidate_skills_lower
+        and s.lower() not in {r.lower() for r in matched_required}
+    ]
+    matched_skills = matched_required + matched_preferred
 
     if not matched_skills:
         sorted_by_endorsements = sorted(
@@ -292,25 +276,25 @@ def _parse_args():
 
 def main() -> None:
     """
-    Orchestrates the optimized two-stage ranking pipeline.
+    Orchestrates the fully-dynamic two-stage ranking pipeline.
 
-    Stage A — Load JD + stream + hard-filter:
-        Parse .docx, embed JD, stream 100K candidates, apply schema
-        validation and hard heuristic filters (timeline, impossible skills).
+    Stage A — Parse JD + embed + stream + hard-filter:
+        Parse .docx → extract JD skills, experience, locations, education,
+        certs (JDParser). Embed JD. Stream 100K candidates, apply schema
+        validation and hard heuristic filters.
 
     Stage B — Batch mismatch detection (data-driven):
         TF-IDF coherence analysis flags profiles where headline domain
-        diverges from career description domain.  No hardcoded pairs.
+        diverges from career description domain.
 
     Stage C — Non-semantic pre-rank + shortlist:
-        Compute fast non-semantic scores for ALL valid candidates,
-        sort, and take the top _SHORTLIST_SIZE (2000).  This is the
-        key optimization: we only embed 2000 candidates instead of 94K.
+        Compute fast non-semantic scores for ALL valid candidates using the
+        JDProfile (dynamic parameters), sort, take top _SHORTLIST_SIZE (2000).
 
     Stage D — Embed shortlist + hybrid score:
-        Batch-encode shortlisted candidate texts, compute cosine
-        similarity vs JD, combine with non-semantic score, apply
-        soft penalties.  Uses vectorized numpy ops.
+        Batch-encode shortlisted candidate texts (full text, no caps),
+        compute cosine similarity vs JD, combine with non-semantic score,
+        apply soft penalties. Uses vectorized numpy ops.
 
     Stage E — Output:
         Sort by score, write top 100 to submission.csv.
@@ -321,7 +305,18 @@ def main() -> None:
     # ── Stage A: JD ─────────────────────────────────────────────────────────
     log.info("Loading job description: %s", args.jd)
     jd_text = load_docx_text(args.jd)
-    jd_keywords = extract_jd_keywords(jd_text)
+
+    log.info("Parsing JD for dynamic signals...")
+    jd_profile = JDParser.parse(jd_text)
+    log.info(
+        "JD parsed: %d required skills, %d preferred, ideal_years=%.1f, "
+        "locations=%s, remote_ok=%s",
+        len(jd_profile.required_skills),
+        len(jd_profile.preferred_skills),
+        jd_profile.ideal_years,
+        jd_profile.preferred_locations,
+        jd_profile.remote_ok,
+    )
 
     log.info("Embedding job description...")
     jd_vector = get_sentence_embeddings([jd_text])[0]
@@ -391,7 +386,7 @@ def main() -> None:
     ns_scores: list[float] = []
     sp_scores: list[float] = []
     for cand in valid_candidates:
-        ns_scores.append(float(compute_non_semantic_score(cand)))
+        ns_scores.append(float(compute_non_semantic_score(cand, jd_profile)))
         sp_scores.append(float(compute_soft_penalty(cand)))
 
     # Sort by penalised non-semantic score descending, take top N
@@ -437,11 +432,11 @@ def main() -> None:
     results: list[dict[str, Any]] = []
     for i, cand in enumerate(shortlist_candidates):
         reasoning = select_reasoning(
-            cand, float(sem_scores[i]), float(total_scores[i]), jd_keywords,
+            cand, float(sem_scores[i]), float(total_scores[i]), jd_profile,
         )
         results.append({
             "candidate_id": cand["candidate_id"],
-            "score": round(float(total_scores[i]), 4),
+            "score": float(total_scores[i]),
             "reasoning": reasoning,
         })
 
@@ -459,7 +454,7 @@ def main() -> None:
             writer.writerow([
                 entry["candidate_id"],
                 rank,
-                entry["score"],
+                round(entry["score"], 4),
                 entry["reasoning"],
             ])
 
