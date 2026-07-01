@@ -441,6 +441,8 @@ def main() -> None:
         })
 
     # ── Stage E: Sort + write ────────────────────────────────────────────────
+    for entry in results:
+        entry["score"] = round(entry["score"], 4)
     results.sort(key=lambda x: (-x["score"], x["candidate_id"]))
     top_100 = results[:100]
 
@@ -454,7 +456,7 @@ def main() -> None:
             writer.writerow([
                 entry["candidate_id"],
                 rank,
-                round(entry["score"], 4),
+                entry["score"],
                 entry["reasoning"],
             ])
 

@@ -151,3 +151,42 @@ poetry run python "../[PUB] India_runs_data_and_ai_challenge/India_runs_data_and
 3. **Text truncation** — Cap candidate text to 500 chars for faster encoding
 4. **Vectorized scoring** — Numpy batch cosine similarity instead of per-candidate loops
 5. **Data-driven mismatch detection** — TF-IDF coherence analysis replaces hardcoded keyword pairs
+
+## Sandbox / Interactive Web UI
+
+The system includes an interactive Web Application (FastAPI backend + Vanilla HTML/CSS/JS frontend) serving as a sandbox environment to test and run the ranking pipeline end-to-end. It features:
+- Manual file uploaders for custom Job Descriptions (.docx, .txt) and Candidate Datasets (.jsonl, .jsonl.gz, .json).
+- Real-time step-by-step progress logging of the active execution stages using Server-Sent Events.
+- Funnel metrics reporting (Input count, Heuristics/schema filters, Domain mismatches, and Final ranked).
+- Interactive Top Ranked Candidates preview table.
+- Downloadable `submission.csv` containing the ranked list matching the challenge spec.
+- Dynamic cross-verification Candidate Details Inspector (renders clean profile JSON upon row click).
+
+### Running the Web UI locally
+To run the web app locally using Poetry:
+```bash
+poetry run python app.py
+```
+Once started, access the Web UI in your browser at: `http://localhost:8501`
+
+### Running with Docker Sandbox
+A self-contained Dockerfile is provided to satisfy the sandbox/demo run requirement. It pre-caches all required Hugging Face model weights (`all-MiniLM-L6-v2` and `google/flan-t5-base`) during the image build phase to guarantee 100% offline functionality.
+
+#### 1. Build the Docker Image
+```bash
+docker build -t candidate-ranker-sandbox .
+```
+
+#### 2. Run the Container
+```bash
+docker run -p 8501:8501 candidate-ranker-sandbox
+```
+Once started, access the Web UI in your browser at: `http://localhost:8501`
+
+#### 3. Compose (Alternative)
+Alternatively, you can spin up the service using docker-compose:
+```bash
+docker compose up --build
+```
+
+

@@ -4,3 +4,6 @@ numpy
 jsonlines
 python-docx
 sentencepiece
+fastapi
+uvicorn
+python-multipart

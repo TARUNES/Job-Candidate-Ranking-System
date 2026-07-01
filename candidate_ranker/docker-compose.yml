@@ -1,0 +1,10 @@
+version: '3.8'
+
+services:
+  sandbox:
+    build: .
+    image: candidate-ranker-sandbox:latest
+    container_name: candidate_ranker_sandbox
+    ports:
+      - "8501:8501"
+    restart: unless-stopped
