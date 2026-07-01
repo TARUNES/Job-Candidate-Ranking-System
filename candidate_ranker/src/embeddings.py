@@ -1,5 +1,6 @@
 import numpy as np
 from sentence_transformers import SentenceTransformer
+import config
 
 class LocalEncoder:
     """
@@ -10,7 +11,7 @@ class LocalEncoder:
     @classmethod
     def get_model(cls):
         if cls._model is None:
-            cls._model = SentenceTransformer('all-MiniLM-L6-v2')
+            cls._model = SentenceTransformer(config.EMBEDDING_MODEL_NAME)
         return cls._model
 
 def get_sentence_embeddings(texts, batch_size=128):

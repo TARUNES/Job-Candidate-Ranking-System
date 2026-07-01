@@ -12,13 +12,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy and install python dependencies
-COPY requirements.txt /app/
+# Copy config and Python requirements
+COPY requirements.txt config.py /app/
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Pre-download and cache models to make the image run completely offline
-RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('all-MiniLM-L6-v2')"
-RUN python -c "from transformers import T5ForConditionalGeneration, T5Tokenizer; T5Tokenizer.from_pretrained('google/flan-t5-base'); T5ForConditionalGeneration.from_pretrained('google/flan-t5-base')"
+RUN python -c "import config; from sentence_transformers import SentenceTransformer; SentenceTransformer(config.EMBEDDING_MODEL_NAME)"
+RUN python -c "import config; from transformers import T5ForConditionalGeneration, T5Tokenizer; T5Tokenizer.from_pretrained(config.PARSING_MODEL_NAME); T5ForConditionalGeneration.from_pretrained(config.PARSING_MODEL_NAME)"
 
 # Copy application source code and static assets
 COPY rank.py /app/

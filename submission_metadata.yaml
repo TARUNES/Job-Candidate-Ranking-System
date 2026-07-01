@@ -1,0 +1,73 @@
+# Redrob Hackathon — Submission Metadata
+#
+# Filled template for verification. Fill in contact and repository details before final submission.
+
+# ============================================================================
+# Team identity
+# ============================================================================
+team_name: "Prompt & Pray"  # Used in leaderboard and announcements
+
+primary_contact:
+  name: "Tarunes K"
+  email: "tarunes12@gmail.com"   # Used for all organizer communication
+  phone: "+91-9342595981"        # Used for top-50 / top-10 outreach
+
+team_members:
+  - name: "Tarunes K"
+    email: "tarunes12@gmail.com"
+    role: "Developer and AI Engineer"
+  - name: "Muskan P"
+    email: "pmuskan2021@gmail.com"
+    role: "Developer and AI Engineer"
+
+# ============================================================================
+# Code and reproducibility
+# ============================================================================
+github_repo: "https://github.com/TARUNES/Job-Candidate-Ranking-System/tree/main/candidate_ranker"
+# Required. Must be reachable. Private repos OK if you can grant organizer access at Stage 3.
+
+sandbox_link: "http://localhost:8501"
+# Required. A working hosted environment where the ranker can be run on a small candidate sample.
+
+reproduce_command: "python rank.py --candidates ../[PUB] India_runs_data_and_ai_challenge/India_runs_data_and_ai_challenge/candidates.jsonl --jd ../[PUB] India_runs_data_and_ai_challenge/India_runs_data_and_ai_challenge/job_description.docx --out submission.csv"
+# The single command that produces submission.csv from candidates.jsonl.
+
+# ============================================================================
+# Compute environment
+# ============================================================================
+compute:
+  platform: "Local Windows PC"
+  cpu_cores: 8
+  ram_gb: 16
+  python_version: "3.12.0"
+  os: "Windows 11"
+  uses_gpu_for_inference: false                 # Must be false
+  has_network_during_ranking: false             # Must be false
+  pre_computation_required: false
+  pre_computation_time_minutes: 0
+
+# ============================================================================
+# AI tools declaration
+# ============================================================================
+ai_tools_used:
+  - "Gemini"
+  - "Antigravity Coding Assistant"
+
+ai_usage_summary: |
+  Used Gemini and Antigravity Coding Assistant for faster development, optimizing UIs, and resolving Docker environment setups.
+
+# ============================================================================
+# Approach summary
+# ============================================================================
+methodology_summary: |
+  We implement a two-stage hybrid ranking funnel. Stage 1 executes fast non-semantic filters (schema validation, honeypot detection, timeline overlap, and a TF-IDF coherence mismatch detector) to screen the 100K candidate pool. Candidates are pre-ranked by an additive non-semantic score (using experience, notice period, location, and platform trust signals), shortlisting the top 2000. Stage 2 embeds the shortlisted candidates using SentenceTransformer (all-MiniLM-L6-v2) for cosine similarity calculation. The final score blends semantic similarity (45%) and non-semantic heuristics (55%). Top 100 entries are sorted and generated with grounded reasoning justifications.
+
+# ============================================================================
+# Declarations
+# ============================================================================
+declarations:
+  read_submission_spec: true        # I have read submission_spec.md in full
+  code_is_original_work: true       # My code is my team's original work (using AI as a tool is fine)
+  no_collusion: true                # I have not coordinated my submission with other teams
+  honeypot_check_done: true         # Set true as we explicitly check for honeypots (timelines, domain mismatches)
+  reproduction_tested: true         # I have tested that my reproduce_command runs end-to-end

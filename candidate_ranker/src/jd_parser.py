@@ -75,7 +75,8 @@ class _LLMSingleton:
 
         try:
             from transformers import T5ForConditionalGeneration, T5Tokenizer
-            model_name = "google/flan-t5-base"
+            import config
+            model_name = config.PARSING_MODEL_NAME
             log.info("Loading local LLM for JD parsing: %s", model_name)
             cls._tokeniser = T5Tokenizer.from_pretrained(model_name)
             cls._model = T5ForConditionalGeneration.from_pretrained(model_name)
