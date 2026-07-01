@@ -202,7 +202,7 @@ async def run_ranking_pipeline_generator(jd_bytes, jd_name, candidates_bytes, ca
         
         # Format the top-100 results for rendering
         table_results = []
-        for rank_val, res in enumerate(results, start=1):
+        for rank_val, res in enumerate(results[:100], start=1):
             table_results.append({
                 "rank": rank_val,
                 "candidate_id": res["candidate_id"],
@@ -235,7 +235,7 @@ async def run_ranking_pipeline_generator(jd_bytes, jd_name, candidates_bytes, ca
                 "ranked": len(results)
             },
             "results": table_results,
-            "raw_profiles": {res["candidate_id"]: res["profile_details"] for res in results},
+            "raw_profiles": {res["candidate_id"]: res["profile_details"] for res in results[:100]},
             "csv_data": csv_data
         }) + "\n"
         

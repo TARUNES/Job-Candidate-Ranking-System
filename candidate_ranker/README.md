@@ -1,192 +1,60 @@
-# Intelligent Candidate Discovery & Ranking System
+# Intelligent Candidate Discovery and Ranking System
 
-An AI-powered candidate ranking pipeline that scores and ranks **100,000 synthetic candidate profiles** against a job description for an **AI/ML Engineer** role. Built for the Redrob Hackathon — runs fully offline on CPU within 5 minutes.
+## Summary
+An AI-powered candidate ranking pipeline designed to score and rank 100,000 synthetic candidate profiles against a job description. The system operates fully offline, running strictly on CPU constraints, and completes the entire process within 5 minutes. It utilizes a two-stage funnel approach, blending non-semantic heuristics with deep semantic embeddings to deliver highly accurate, justifiable rankings.
 
-## Pipeline Flow
+## Execution Guide
 
-```mermaid
-flowchart TD
-    A["📄 Job Description (.docx)"] --> B["Embed JD with SentenceTransformer"]
-    C["📂 Candidates (100K JSONL)"] --> D["Stream & Validate Schema"]
-
-    D --> E{"Hard Filters"}
-    E -->|"Timeline Overlaps"| F["❌ Discard"]
-    E -->|"Impossible Skills"| F
-    E -->|"Pass"| G["~95K Valid Candidates"]
-
-    G --> H["🔍 TF-IDF Mismatch Detection\n(data-driven, no hardcoded pairs)"]
-    H -->|"Flagged"| F
-    H -->|"Pass"| I["~93K Clean Candidates"]
-
-    I --> J["⚡ Non-Semantic Pre-Rank\n(experience, location, signals, trust)"]
-    J --> K["📋 Shortlist Top 2,000"]
-
-    K --> L["🧠 Batch Encode with\nall-MiniLM-L6-v2"]
-    B --> M["Cosine Similarity"]
-    L --> M
-
-    M --> N["Hybrid Score\n0.45 × semantic + 0.55 × non-semantic"]
-    N --> O["Sort & Select Top 100"]
-    O --> P["📊 submission.csv"]
-```
-
-## Scoring Breakdown
-
-| Dimension | Weight | Source |
-|---|---|---|
-| **Semantic similarity** | 45% | Cosine similarity between JD and candidate embeddings |
-| **Non-semantic score** | 55% | Weighted composite of 5 sub-scores (see below) |
-
-### Non-Semantic Sub-Scores
-
-| Sub-Score | Weight | Logic |
-|---|---|---|
-| Experience | 15% | Gaussian curve peaking at 7 years (std=3.5) |
-| Notice period | 10% | Linear decay: 30d → 1.0, 180d → 0.0 |
-| Location | 10% | Tier-1 Indian hubs preferred, floor 0.35 |
-| Platform signals | 45% | 7 behavioral signals (GitHub, response rate, assessments, etc.) |
-| Trust signals | 20% | Email/phone verification, LinkedIn, endorsements |
-
-## Project Structure
-
-```
-candidate_ranker/
-├── rank.py                  # CLI entry-point, orchestrates the full pipeline
-├── pyproject.toml           # Poetry dependencies
-├── requirements.txt         # Pip-compatible dependency list
-├── src/
-│   ├── __init__.py
-│   ├── data_loader.py       # JSONL streaming + .docx parsing
-│   ├── embeddings.py        # SentenceTransformer wrapper (all-MiniLM-L6-v2)
-│   ├── heuristics.py        # Hard filters, TF-IDF mismatch detector, soft penalties
-│   ├── schema_validator.py  # Structural validation of candidate records
-│   └── scoring.py           # Non-semantic sub-score calculations
-└── submission.csv           # Output (generated after running)
-```
-
-## Installation
-
-### Prerequisites
-
-- **Python 3.12+**
-- **Poetry** (Python package manager)
-
-### Steps
+### Option 1: Docker Sandbox (Recommended)
+The repository includes a self-contained Dockerfile that pre-caches all required model weights. This guarantees 100% offline functionality without manual environment setup.
 
 ```bash
-# 1. Clone the repository
-git clone <repo-url>
-cd Job-Candidate-Ranking-System/candidate_ranker
+docker-compose up -d --build
+```
+Once the container starts, access the interactive web sandbox at `http://localhost:8501`.
 
-# 2. Set up the Python environment with Poetry
+### Option 2: Local Execution
+Requires Python 3.12+ and Poetry.
+
+```bash
+# 1. Install dependencies
 poetry env use 3.12
-poetry lock
 poetry install
 
-# 3. Verify all dependencies are installed
-poetry run python -c "import sentence_transformers; import pandas; import numpy; import jsonlines; import docx; print('All dependencies OK')"
-```
+# 2. Run the interactive web UI
+poetry run python app.py
 
-### Installed Packages
-
-| Package | Version | Purpose |
-|---|---|---|
-| `sentence-transformers` | ^3.0.0 | Semantic embeddings (all-MiniLM-L6-v2) |
-| `torch` | ^2.5.0 | ML backend for sentence-transformers |
-| `pandas` | ^2.0.0 | Data manipulation |
-| `numpy` | ^2.0.0 | Numerical computation |
-| `jsonlines` | ^4.0.0 | JSONL file streaming |
-| `python-docx` | ^1.0.0 | Parsing .docx job description |
-
-> **Note:** `scikit-learn` is automatically installed as a dependency of `sentence-transformers` and is used for TF-IDF mismatch detection.
-
-## Execution
-
-```bash
+# 3. Alternatively, run the CLI pipeline directly
 poetry run python rank.py \
     --candidates path/to/candidates.jsonl \
     --jd path/to/job_description.docx \
     --out submission.csv
 ```
 
-### Example (with hackathon dataset)
+## Architecture and Pipeline Flow
 
-```bash
-poetry run python rank.py \
-    --candidates "../[PUB] India_runs_data_and_ai_challenge/India_runs_data_and_ai_challenge/candidates.jsonl" \
-    --jd "../[PUB] India_runs_data_and_ai_challenge/India_runs_data_and_ai_challenge/job_description.docx" \
-    --out submission.csv
-```
+1. **Document Parsing:** Unstructured job descriptions are parsed to extract core requirements.
+2. **Data Streaming and Validation:** Candidate records are streamed sequentially and validated for structural integrity.
+3. **Hard Filtering:** Profiles triggering heuristic honeypots (e.g., overlapping timelines, impossible skills) are dropped instantly.
+4. **Mismatch Detection:** Coherence analysis filters profiles demonstrating domain mismatches between their headline and career history.
+5. **Heuristic Pre-Rank:** A fast composite score is calculated based on experience curves, location hubs, and trust signals to shortlist the top 2,000 candidates.
+6. **Semantic Encoding:** Text from the shortlisted profiles is batched and encoded into dense vectors.
+7. **Hybrid Scoring:** Cosine similarity is computed against the job description and merged with the heuristic score.
+8. **Justification Generation:** Grounded reasoning strings are generated for the final top 100 profiles based on extracted data.
 
-### Output
+## Design Decisions and Model Choices
 
-The script produces `submission.csv` with exactly 100 rows:
+### Model: all-MiniLM-L6-v2 (SentenceTransformer)
+**Why:** Chosen for its optimal balance of speed and semantic accuracy on CPU hardware. It produces 384-dimensional vectors rapidly, allowing the system to embed 2,000 profiles in seconds and adhere strictly to the 5-minute limit.
 
-| Column | Description |
-|---|---|
-| `candidate_id` | e.g., `CAND_0012345` |
-| `rank` | 1–100 (1 = best fit) |
-| `score` | Hybrid score (0.0–1.0) |
-| `reasoning` | 1–2 sentence justification grounded in profile data |
+### Model: Google Flan-T5-base
+**Why:** Selected for zero-shot text structure parsing. It reliably extracts strict constraints (like minimum years of experience and core skills) from unstructured job descriptions without requiring external network API calls.
 
-### Validate Submission
+### Architecture: Two-Stage Funnel
+**Why:** Running deep semantic encoding on 100,000 text profiles using purely CPU compute heavily exceeds the time limit. The first stage uses ultra-fast heuristic pre-ranking to discard 98% of the dataset, reserving computationally expensive transformer inference solely for the top 2,000 candidates.
 
-```bash
-poetry run python "../[PUB] India_runs_data_and_ai_challenge/India_runs_data_and_ai_challenge/validate_submission.py" submission.csv
-```
+### Algorithm: TF-IDF Mismatch Detection
+**Why:** Provides a robust, data-driven approach to detect logically inconsistent profiles. It identifies vocabulary divergence between a candidate's stated headline and their actual career history descriptions without relying on brittle, hardcoded keyword rules.
 
-## Compute Constraints
-
-| Constraint | Limit | Status |
-|---|---|---|
-| Runtime | ≤ 5 min wall-clock | ✅ ~85s with two-stage funnel |
-| RAM | ≤ 16 GB | ✅ Streaming + shortlist keeps memory low |
-| Compute | CPU only | ✅ No GPU required |
-| Network | Offline | ✅ Model cached locally after first download |
-
-## Key Optimizations
-
-1. **Two-stage funnel** — Pre-rank 95K candidates by non-semantic score (instant), then only embed the top 2,000
-2. **Batch encoding** — `batch_size=128` for better CPU throughput
-3. **Text truncation** — Cap candidate text to 500 chars for faster encoding
-4. **Vectorized scoring** — Numpy batch cosine similarity instead of per-candidate loops
-5. **Data-driven mismatch detection** — TF-IDF coherence analysis replaces hardcoded keyword pairs
-
-## Sandbox / Interactive Web UI
-
-The system includes an interactive Web Application (FastAPI backend + Vanilla HTML/CSS/JS frontend) serving as a sandbox environment to test and run the ranking pipeline end-to-end. It features:
-- Manual file uploaders for custom Job Descriptions (.docx, .txt) and Candidate Datasets (.jsonl, .jsonl.gz, .json).
-- Real-time step-by-step progress logging of the active execution stages using Server-Sent Events.
-- Funnel metrics reporting (Input count, Heuristics/schema filters, Domain mismatches, and Final ranked).
-- Interactive Top Ranked Candidates preview table.
-- Downloadable `submission.csv` containing the ranked list matching the challenge spec.
-- Dynamic cross-verification Candidate Details Inspector (renders clean profile JSON upon row click).
-
-### Running the Web UI locally
-To run the web app locally using Poetry:
-```bash
-poetry run python app.py
-```
-Once started, access the Web UI in your browser at: `http://localhost:8501`
-
-### Running with Docker Sandbox
-A self-contained Dockerfile is provided to satisfy the sandbox/demo run requirement. It pre-caches all required Hugging Face model weights (`all-MiniLM-L6-v2` and `google/flan-t5-base`) during the image build phase to guarantee 100% offline functionality.
-
-#### 1. Build the Docker Image
-```bash
-docker build -t candidate-ranker-sandbox .
-```
-
-#### 2. Run the Container
-```bash
-docker run -p 8501:8501 candidate-ranker-sandbox
-```
-Once started, access the Web UI in your browser at: `http://localhost:8501`
-
-#### 3. Compose (Alternative)
-Alternatively, you can spin up the service using docker-compose:
-```bash
-docker compose up --build
-```
-
-
+### Implementation: Vectorized Cosine Similarity
+**Why:** Implemented using NumPy matrix operations rather than iterative loops, drastically reducing the time required to calculate semantic alignment scores across the shortlisted candidate pool.

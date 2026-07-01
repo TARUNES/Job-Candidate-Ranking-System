@@ -4,451 +4,235 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Candidate Discovery and Ranking System</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
-
         :root {
-            --primary: #3b82f6;
-            --primary-hover: #2563eb;
-            --bg-main: #0b0f19;
-            --bg-card: #111827;
-            --bg-card-hover: #1f2937;
-            --border-color: #1f2937;
-            --text-dark: #f9fafb;
-            --text-muted: #9ca3af;
+            --primary: #6366f1;
+            --primary-hover: #4f46e5;
+            --primary-glow: rgba(99, 102, 241, 0.4);
+            --bg-main: #05050a;
+            --bg-card: rgba(20, 20, 25, 0.6);
+            --border-color: rgba(255, 255, 255, 0.08);
+            --text-dark: #f8fafc;
+            --text-muted: #94a3b8;
             --success: #10b981;
+            --success-glow: rgba(16, 185, 129, 0.3);
             --warning: #f59e0b;
-            --running: #3b82f6;
-            --pending: #4b5563;
-            --timeline-line: #1f2937;
+            --running: #38bdf8;
+            --running-glow: rgba(56, 189, 248, 0.4);
+            --pending: #334155;
+            --timeline-line: rgba(255, 255, 255, 0.1);
+            --font-main: 'Outfit', sans-serif;
+            --font-mono: 'JetBrains Mono', monospace;
         }
 
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
 
         body {
-            font-family: 'Inter', sans-serif;
+            font-family: var(--font-main);
             background-color: var(--bg-main);
             color: var(--text-dark);
-            line-height: 1.5;
+            line-height: 1.6;
             padding: 40px 20px;
+            background-image: 
+                radial-gradient(circle at 15% 50%, rgba(99, 102, 241, 0.05), transparent 25%),
+                radial-gradient(circle at 85% 30%, rgba(56, 189, 248, 0.05), transparent 25%);
+            background-attachment: fixed;
         }
 
-        .container {
-            max-width: 1200px;
-            margin: 0 auto;
-        }
+        .container { max-width: 1280px; margin: 0 auto; }
 
-        /* Header Style */
         header {
-            background-color: var(--bg-card);
+            background: var(--bg-card);
+            backdrop-filter: blur(12px);
             border: 1px solid var(--border-color);
-            padding: 30px;
-            border-radius: 8px;
+            padding: 35px;
+            border-radius: 16px;
             margin-bottom: 30px;
-            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06);
+            text-align: center;
+            box-shadow: 0 10px 30px -10px rgba(0,0,0,0.5);
+            position: relative;
+            overflow: hidden;
+        }
+
+        header::before {
+            content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px;
+            background: linear-gradient(90deg, transparent, var(--primary), transparent);
         }
 
         h1 {
-            font-size: 2.2rem;
-            font-weight: 700;
-            letter-spacing: -0.025em;
-            margin-bottom: 8px;
-            color: #ffffff;
+            font-size: 2.5rem; font-weight: 700; letter-spacing: -0.02em; margin-bottom: 10px;
+            background: linear-gradient(to right, #fff, #a5b4fc);
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
         }
 
-        .subtitle {
-            font-size: 1.05rem;
-            font-weight: 300;
-            color: var(--text-muted);
-        }
+        .subtitle { font-size: 1.1rem; font-weight: 300; color: var(--text-muted); max-width: 800px; margin: 0 auto; }
 
-        /* Main Grid Layout */
-        .grid-inputs {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 20px;
-            margin-bottom: 30px;
-        }
+        .grid-inputs { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-bottom: 30px; }
 
         .card {
-            background-color: var(--bg-card);
-            border: 1px solid var(--border-color);
-            border-radius: 8px;
-            padding: 24px;
-            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
+            background: var(--bg-card); backdrop-filter: blur(12px);
+            border: 1px solid var(--border-color); border-radius: 16px; padding: 28px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.2); transition: transform 0.2s ease;
         }
 
-        h2 {
-            font-size: 1.25rem;
-            font-weight: 600;
-            color: #ffffff;
-            margin-bottom: 16px;
-        }
+        h2 { font-size: 1.3rem; font-weight: 600; color: #ffffff; margin-bottom: 20px; display: flex; align-items: center; gap: 10px; }
 
-        /* Upload boxes */
         .upload-box {
-            border: 2px dashed var(--border-color);
-            border-radius: 6px;
-            padding: 30px 20px;
-            text-align: center;
-            cursor: pointer;
-            transition: border-color 0.2s ease, background-color 0.2s ease;
-            background-color: rgba(17, 24, 39, 0.5);
+            border: 2px dashed rgba(255,255,255,0.15); border-radius: 12px; padding: 40px 20px;
+            text-align: center; cursor: pointer; transition: all 0.3s ease; background: rgba(0,0,0,0.2);
         }
 
         .upload-box:hover, .upload-box.dragover {
-            border-color: var(--primary);
-            background-color: rgba(59, 130, 246, 0.05);
+            border-color: var(--primary); background: rgba(99, 102, 241, 0.05); box-shadow: 0 0 20px var(--primary-glow);
         }
 
-        .upload-box input[type="file"] {
-            display: none;
-        }
-
-        .upload-label {
-            font-size: 0.95rem;
-            font-weight: 500;
-            color: var(--text-muted);
-        }
-
+        .upload-box input[type="file"] { display: none; }
+        .upload-label { font-size: 1.05rem; font-weight: 500; color: var(--text-muted); }
         .file-info {
-            margin-top: 8px;
-            font-size: 0.85rem;
-            color: var(--success);
-            font-weight: 500;
-            display: none;
+            margin-top: 12px; font-size: 0.9rem; color: var(--success); font-weight: 500;
+            display: none; background: rgba(16, 185, 129, 0.1); padding: 6px 12px; border-radius: 20px;
         }
 
-        /* Button */
         .btn-run {
-            display: block;
-            width: 100%;
-            padding: 14px;
-            background-color: var(--primary);
-            color: white;
-            border: none;
-            border-radius: 6px;
-            font-size: 1rem;
-            font-weight: 600;
-            cursor: pointer;
-            transition: background-color 0.2s ease, transform 0.15s ease;
-            text-align: center;
-            margin-bottom: 30px;
-            box-shadow: 0 4px 6px -1px rgba(59, 130, 246, 0.2);
+            display: block; width: 100%; padding: 16px;
+            background: linear-gradient(135deg, var(--primary), #8b5cf6);
+            color: white; border: none; border-radius: 12px; font-size: 1.1rem; font-weight: 600;
+            letter-spacing: 0.02em; cursor: pointer; transition: all 0.2s ease; margin-bottom: 40px;
+            box-shadow: 0 10px 20px var(--primary-glow);
         }
 
-        .btn-run:hover {
-            background-color: var(--primary-hover);
-        }
+        .btn-run:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 15px 25px var(--primary-glow); }
+        .btn-run:active:not(:disabled) { transform: translateY(1px); }
+        .btn-run:disabled { background: #1e1e24; color: #64748b; cursor: not-allowed; box-shadow: none; border: 1px solid var(--border-color); }
 
-        .btn-run:active {
-            transform: scale(0.99);
-        }
+        .flow-container { display: none; margin-bottom: 40px; }
+        .timeline { position: relative; padding-left: 36px; margin-top: 24px; }
+        .timeline::before { content: ''; position: absolute; left: 11px; top: 10px; bottom: 10px; width: 2px; background: var(--timeline-line); }
 
-        .btn-run:disabled {
-            background-color: #1f2937;
-            color: #4b5563;
-            border: 1px solid var(--border-color);
-            cursor: not-allowed;
-            box-shadow: none;
-        }
-
-        /* Connected Timeline Progress Flow */
-        .flow-container {
-            display: none;
-            margin-bottom: 30px;
-        }
-
-        .timeline {
-            position: relative;
-            padding-left: 32px;
-            margin-top: 20px;
-        }
-
-        /* Vertical line connecting the steps */
-        .timeline::before {
-            content: '';
-            position: absolute;
-            left: 10px;
-            top: 10px;
-            bottom: 10px;
-            width: 2px;
-            background-color: var(--timeline-line);
-        }
-
-        .timeline-item {
-            position: relative;
-            margin-bottom: 24px;
-        }
-
-        .timeline-item:last-child {
-            margin-bottom: 0;
-        }
+        .timeline-item { position: relative; margin-bottom: 28px; }
+        .timeline-item:last-child { margin-bottom: 0; }
 
         .timeline-badge {
-            position: absolute;
-            left: -32px;
-            top: 3px;
-            width: 22px;
-            height: 22px;
-            border-radius: 50%;
-            background-color: var(--pending);
-            border: 4px solid var(--bg-card);
-            transition: background-color 0.3s ease, box-shadow 0.3s ease;
+            position: absolute; left: -36px; top: 4px; width: 24px; height: 24px; border-radius: 50%;
+            background-color: var(--pending); border: 4px solid #141419; transition: all 0.4s ease;
         }
 
         .timeline-badge.status-running {
             background-color: var(--running);
-            box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.3);
+            box-shadow: 0 0 12px var(--running-glow), 0 0 0 4px rgba(56, 189, 248, 0.2);
+            animation: pulse-ring 2s infinite;
         }
 
-        .timeline-badge.status-success {
-            background-color: var(--success);
-            box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.1);
-        }
+        .timeline-badge.status-success { background-color: var(--success); box-shadow: 0 0 12px var(--success-glow); }
 
-        .timeline-badge.status-failed {
-            background-color: var(--warning);
+        @keyframes pulse-ring {
+            0% { box-shadow: 0 0 0 0 rgba(56, 189, 248, 0.4); }
+            70% { box-shadow: 0 0 0 10px rgba(56, 189, 248, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(56, 189, 248, 0); }
         }
 
         .timeline-content {
-            background-color: rgba(17, 24, 39, 0.3);
-            border: 1px solid var(--border-color);
-            padding: 14px 18px;
-            border-radius: 6px;
+            background: rgba(255, 255, 255, 0.02); border: 1px solid var(--border-color);
+            padding: 16px 20px; border-radius: 10px; transition: all 0.3s ease;
         }
 
-        .timeline-step-num {
-            font-size: 0.75rem;
-            font-weight: 700;
-            color: var(--primary);
-            text-transform: uppercase;
-            margin-bottom: 2px;
-            letter-spacing: 0.05em;
-        }
+        .status-running + .timeline-content { border-color: rgba(56, 189, 248, 0.3); background: rgba(56, 189, 248, 0.03); }
 
-        .timeline-step-title {
-            font-size: 0.95rem;
-            font-weight: 600;
-            color: #ffffff;
-            margin-bottom: 4px;
-        }
+        .timeline-step-num { font-size: 0.75rem; font-weight: 700; color: var(--primary); text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 4px; }
+        .timeline-step-title { font-size: 1.05rem; font-weight: 600; color: #ffffff; margin-bottom: 6px; }
+        .timeline-step-desc { font-size: 0.9rem; color: var(--text-muted); }
+        .timeline-step-log { font-size: 0.85rem; color: var(--success); margin-top: 8px; font-weight: 500; display: none; font-family: var(--font-mono); }
 
-        .timeline-step-desc {
-            font-size: 0.85rem;
-            color: var(--text-muted);
-        }
+        .time-elapsed { margin-top: 24px; font-size: 1rem; font-weight: 600; color: var(--primary); text-align: right; font-family: var(--font-mono); }
 
-        .timeline-step-tech-info {
-            font-size: 0.8rem;
-            color: #a5b4fc;
-            background-color: rgba(79, 70, 229, 0.1);
-            border: 1px solid rgba(165, 180, 252, 0.2);
-            padding: 6px 12px;
-            border-radius: 4px;
-            margin-top: 8px;
-            display: none;
-            font-family: monospace;
-            line-height: 1.4;
-        }
-
-        .timeline-step-log {
-            font-size: 0.85rem;
-            color: var(--success);
-            margin-top: 6px;
-            font-weight: 500;
-            display: none;
-        }
-
-        .time-elapsed {
-            margin-top: 20px;
-            font-size: 0.95rem;
-            font-weight: 500;
-            color: var(--text-muted);
-            text-align: right;
-        }
-
-        /* Metrics */
-        .metrics-container {
-            display: none;
-            grid-template-columns: repeat(4, 1fr);
-            gap: 20px;
-            margin-bottom: 30px;
-        }
-
+        .metrics-container { display: none; grid-template-columns: repeat(5, 1fr); gap: 16px; margin-bottom: 40px; }
         .metric-card {
-            background-color: var(--bg-card);
-            border: 1px solid var(--border-color);
-            border-radius: 6px;
-            padding: 20px;
-            text-align: center;
-            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
+            background: linear-gradient(180deg, rgba(30,30,40,0.8) 0%, rgba(20,20,25,0.8) 100%);
+            border: 1px solid var(--border-color); border-radius: 12px; padding: 24px 16px; text-align: center; position: relative; overflow: hidden;
         }
+        .metric-card::after { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px; background: var(--primary); opacity: 0.5; }
+        .metric-card:nth-child(5)::after { background: var(--success); opacity: 1; }
 
-        .metric-val {
-            font-size: 2rem;
-            font-weight: 700;
-            color: #ffffff;
-            margin-bottom: 4px;
-        }
+        .metric-val { font-size: 2.2rem; font-weight: 700; color: #ffffff; margin-bottom: 4px; font-family: var(--font-mono); }
+        .metric-lbl { font-size: 0.8rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; font-weight: 500; }
+        .metric-sub { font-size: 0.75rem; color: var(--success); margin-top: 8px; font-weight: 600; }
 
-        .metric-lbl {
-            font-size: 0.8rem;
-            color: var(--text-muted);
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-        }
-
-        /* Results Panel Split Layout */
-        .results-panel {
-            display: none;
-            grid-template-columns: 1.5fr 1fr;
-            gap: 20px;
-        }
-
-        /* Table */
-        .table-card {
-            display: flex;
-            flex-direction: column;
-            overflow: hidden;
-        }
-
-        .table-header-row {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 16px;
-        }
+        .results-panel { display: none; grid-template-columns: 1.2fr 1fr; gap: 24px; }
+        .table-card { display: flex; flex-direction: column; }
+        .table-header-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
 
         .btn-download {
-            padding: 8px 16px;
-            background-color: var(--success);
-            color: white;
-            border: none;
-            border-radius: 4px;
-            font-size: 0.9rem;
-            font-weight: 600;
-            cursor: pointer;
-            text-decoration: none;
-            display: inline-block;
-            transition: background-color 0.2s ease;
+            padding: 8px 20px; background: rgba(16, 185, 129, 0.1); color: var(--success);
+            border: 1px solid var(--success); border-radius: 8px; font-size: 0.9rem; font-weight: 600;
+            text-decoration: none; transition: all 0.2s ease;
         }
+        .btn-download:hover { background: var(--success); color: white; box-shadow: 0 4px 12px var(--success-glow); }
 
-        .btn-download:hover {
-            background-color: #059669;
-        }
+        .table-container { overflow-y: auto; max-height: 600px; border: 1px solid var(--border-color); border-radius: 10px; background: rgba(0,0,0,0.2); }
 
-        .table-container {
-            overflow-x: auto;
-            max-height: 520px;
-            border: 1px solid var(--border-color);
-            border-radius: 4px;
-        }
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: rgba(0,0,0,0.1); }
+        ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.2); }
 
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            font-size: 0.9rem;
-            text-align: left;
-        }
-
-        th, td {
-            padding: 12px 16px;
-            border-bottom: 1px solid var(--border-color);
-        }
-
+        table { width: 100%; border-collapse: collapse; font-size: 0.95rem; text-align: left; }
+        th, td { padding: 16px; border-bottom: 1px solid rgba(255,255,255,0.05); }
         th {
-            background-color: #1f2937;
-            color: #ffffff;
-            font-weight: 600;
-            position: sticky;
-            top: 0;
-            z-index: 1;
+            background: rgba(20, 20, 25, 0.95); backdrop-filter: blur(4px); color: var(--text-muted);
+            font-weight: 500; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.05em; position: sticky; top: 0; z-index: 1;
         }
+        tr { cursor: pointer; transition: background 0.2s ease; }
+        tr:hover { background: rgba(255,255,255,0.03); }
+        tr.selected { background: rgba(99, 102, 241, 0.1); border-left: 3px solid var(--primary); }
 
-        tr {
-            cursor: pointer;
-            background-color: var(--bg-card);
-            transition: background-color 0.15s ease;
-        }
+        td.col-rank { width: 10%; font-weight: 700; color: var(--text-muted); }
+        tr.selected td.col-rank { color: var(--primary); }
+        td.col-id { width: 25%; font-family: var(--font-mono); font-size: 0.85rem; }
+        td.col-score { width: 15%; font-family: var(--font-mono); font-weight: 600; color: var(--success); }
+        td.col-reason { width: 50%; color: var(--text-muted); font-size: 0.9rem; line-height: 1.4; }
+        tr.selected td.col-reason { color: #f8fafc; }
 
-        tr:hover {
-            background-color: #1f2937;
-        }
-
-        tr.selected {
-            background-color: #1e3a8a;
-            color: #ffffff;
-        }
-
-        td.col-rank { width: 12%; font-weight: 600; }
-        td.col-id { width: 28%; font-family: monospace; font-weight: 500; }
-        td.col-score { width: 20%; font-family: monospace; color: var(--success); }
-        td.col-reason { width: 40%; color: var(--text-muted); font-size: 0.85rem; }
-
-        tr.selected td.col-reason {
-            color: #e5e7eb;
-        }
-        
-        tr.selected td.col-score {
-            color: #34d399;
-        }
-
-        /* Inspector */
-        .inspector-card {
-            display: flex;
-            flex-direction: column;
-            max-height: 600px;
-        }
-
+        .inspector-card { display: flex; flex-direction: column; max-height: 600px; }
         .inspector-placeholder {
-            color: var(--text-muted);
-            font-size: 0.95rem;
-            margin-top: 40px;
-            text-align: center;
+            display: flex; align-items: center; justify-content: center; height: 100%;
+            color: var(--text-muted); font-size: 1.1rem; text-align: center;
+            border: 2px dashed rgba(255,255,255,0.05); border-radius: 12px; margin-top: 10px; padding: 20px;
+        }
+        .inspector-content { display: none; flex-grow: 1; overflow-y: auto; padding-right: 10px; }
+        .scorecard-header { padding-bottom: 20px; border-bottom: 1px solid var(--border-color); margin-bottom: 20px; }
+        .sc-id { font-family: var(--font-mono); font-size: 0.9rem; color: var(--primary); margin-bottom: 4px; }
+        .sc-title { font-size: 1.5rem; font-weight: 700; color: #fff; margin-bottom: 8px; line-height: 1.2; }
+        
+        .sc-badges { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 16px; }
+        .badge {
+            padding: 4px 10px; border-radius: 6px; font-size: 0.8rem; font-weight: 600;
+            background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: #e2e8f0;
+            display: inline-flex; align-items: center; gap: 6px;
+        }
+        .badge.highlight { background: rgba(99, 102, 241, 0.15); border-color: rgba(99, 102, 241, 0.3); color: #a5b4fc; }
+        .badge.trust { background: rgba(16, 185, 129, 0.1); border-color: rgba(16, 185, 129, 0.3); color: #34d399; }
+
+        .sc-section-title { font-size: 0.9rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); margin-bottom: 10px; font-weight: 600; margin-top: 24px; }
+        .sc-reasoning-box {
+            background: rgba(16, 185, 129, 0.05); border-left: 3px solid var(--success);
+            padding: 16px; border-radius: 0 8px 8px 0; font-size: 0.95rem; color: #e2e8f0; line-height: 1.5;
         }
 
-        .inspector-content {
-            display: none;
-            flex-grow: 1;
-            overflow: hidden;
+        .sc-skills { display: flex; gap: 8px; flex-wrap: wrap; }
+        .skill-pill {
+            padding: 4px 12px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 20px; font-size: 0.85rem; color: #cbd5e1;
         }
 
-        .cand-info-header {
-            margin-bottom: 16px;
-            padding-bottom: 12px;
-            border-bottom: 1px solid var(--border-color);
+        .json-toggle {
+            margin-top: 30px; background: none; border: none; color: var(--primary); font-family: var(--font-main);
+            font-size: 0.9rem; cursor: pointer; display: flex; align-items: center; gap: 6px; font-weight: 500;
         }
-
-        .cand-info-title {
-            font-size: 1.1rem;
-            font-weight: 600;
-            color: #ffffff;
-        }
-
-        .cand-info-subtitle {
-            font-size: 0.85rem;
-            color: var(--text-muted);
-            margin-top: 4px;
-            line-height: 1.4;
-        }
-
+        .json-toggle:hover { text-decoration: underline; }
         pre {
-            background-color: #030712;
-            color: #38bdf8;
-            border: 1px solid var(--border-color);
-            padding: 16px;
-            border-radius: 4px;
-            font-size: 0.85rem;
-            overflow-y: auto;
-            max-height: 420px;
-            white-space: pre-wrap;
-            word-break: break-all;
-            font-family: monospace;
+            display: none; margin-top: 10px; background: #000; border: 1px solid var(--border-color);
+            padding: 16px; border-radius: 8px; font-size: 0.8rem; font-family: var(--font-mono); color: #7dd3fc; overflow-x: auto;
         }
     </style>
 </head>
@@ -456,165 +240,44 @@
 
 <div class="container">
     <header>
-        <h1 class="header-title">Candidate Discovery and Ranking Sandbox</h1>
-        <p class="header-subtitle">An offline two-stage ranking pipeline with dynamic job description parsing, hard filters, and semantic alignment.</p>
+        <h1>Intelligence Sandbox</h1>
+        <p class="subtitle">AI-Driven Two-Stage Candidate Ranking Pipeline. Evaluates skills, experience, constraints, and deep semantic alignment in completely offline constraints.</p>
     </header>
 
-    <!-- Upload Panel -->
     <div class="grid-inputs">
-        <!-- Job Description Card -->
         <div class="card">
-            <h2>Job Description</h2>
+            <h2><svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg> Job Description</h2>
             <div class="upload-box" id="jd-dropzone" onclick="document.getElementById('jd-file').click()">
-                <div class="upload-label">Drag and drop or click to upload Job Description (docx, txt)</div>
+                <div class="upload-label">Click or drop JD file (.docx, .txt)</div>
                 <input type="file" id="jd-file" accept=".docx,.txt">
-                <div class="file-info" id="jd-file-info">Selected file: None</div>
+                <div class="file-info" id="jd-file-info" style="display:none;"></div>
             </div>
         </div>
 
-        <!-- Candidate Dataset Card -->
         <div class="card">
-            <h2>Candidate Profiles</h2>
+            <h2><svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path></svg> Dataset</h2>
             <div class="upload-box" id="candidates-dropzone" onclick="document.getElementById('candidates-file').click()">
-                <div class="upload-label">Drag and drop or click to upload Candidate Dataset (jsonl, jsonl.gz, json)</div>
+                <div class="upload-label">Click or drop Candidates (.jsonl)</div>
                 <input type="file" id="candidates-file" accept=".jsonl,.gz,.json">
-                <div class="file-info" id="candidates-file-info">Selected file: None</div>
+                <div class="file-info" id="candidates-file-info" style="display:none;"></div>
             </div>
         </div>
     </div>
 
-    <!-- Execution Button -->
-    <button class="btn-run" id="btn-run" disabled>Run Candidate Ranking Pipeline</button>
+    <button class="btn-run" id="btn-run" disabled>Execute Ranking Pipeline</button>
 
-    <!-- Progress Pipeline Flow Timeline -->
     <div class="card flow-container" id="flow-container">
-        <h2>Execution Pipeline Flow</h2>
+        <h2>Pipeline Execution</h2>
         <div class="timeline">
-            <!-- Step 1 -->
-            <div class="timeline-item" id="step-1">
-                <div class="timeline-badge status-pending" id="badge-1"></div>
-                <div class="timeline-content">
-                    <div class="timeline-step-num">Step 1</div>
-                    <div class="timeline-step-title">Load Machine Learning Models</div>
-                    <div class="timeline-step-desc">Initialize ML inference engines from local disk cache.</div>
-                    <div class="timeline-step-tech-info" style="display: block;">
-                        SentenceTransformer (all-MiniLM-L6-v2) for generating 384-dimensional dense semantic vectors. Google Flan-T5-base for zero-shot text structure parsing and constraint extraction. Offline execution constraint active.
-                    </div>
-                    <div class="timeline-step-log" id="log-1">Pending</div>
-                </div>
-            </div>
-
-            <!-- Step 2 -->
-            <div class="timeline-item" id="step-2">
-                <div class="timeline-badge status-pending" id="badge-2"></div>
-                <div class="timeline-content">
-                    <div class="timeline-step-num">Step 2</div>
-                    <div class="timeline-step-title">Parse Job Description (JD)</div>
-                    <div class="timeline-step-desc">Extract required/preferred skills, target experience, and location constraints from the job description.</div>
-                    <div class="timeline-step-tech-info" style="display: block;">
-                        Flan-T5 model executes dynamic entity extraction templates on the unstructured JD text, parsing specific criteria into strict structured properties.
-                    </div>
-                    <div class="timeline-step-log" id="log-2">Pending</div>
-                </div>
-            </div>
-
-            <!-- Step 3 -->
-            <div class="timeline-item" id="step-3">
-                <div class="timeline-badge status-pending" id="badge-3"></div>
-                <div class="timeline-content">
-                    <div class="timeline-step-num">Step 3</div>
-                    <div class="timeline-step-title">Generate Job Description Semantic Embedding</div>
-                    <div class="timeline-step-desc">Encode the parsed job description into a high-dimensional vector.</div>
-                    <div class="timeline-step-tech-info" style="display: block;">
-                        SentenceTransformer maps the processed JD criteria text to a normalized dense vector to enable semantic similarity checks.
-                    </div>
-                    <div class="timeline-step-log" id="log-3">Pending</div>
-                </div>
-            </div>
-
-            <!-- Step 4 -->
-            <div class="timeline-item" id="step-4">
-                <div class="timeline-badge status-pending" id="badge-4"></div>
-                <div class="timeline-content">
-                    <div class="timeline-step-num">Step 4</div>
-                    <div class="timeline-step-title">Stream Candidates & Apply Hard Heuristic Filters</div>
-                    <div class="timeline-step-desc">Iterate candidate records and filter out profiles with hard disqualifying signals.</div>
-                    <div class="timeline-step-tech-info" style="display: block;">
-                        JSONLines records are streamed sequentially. Implements strict notice period constraints, schema-validation rules, and impossible-skills honeypot filters to avoid scoring overhead.
-                    </div>
-                    <div class="timeline-step-log" id="log-4">Pending</div>
-                </div>
-            </div>
-
-            <!-- Step 5 -->
-            <div class="timeline-item" id="step-5">
-                <div class="timeline-badge status-pending" id="badge-5"></div>
-                <div class="timeline-content">
-                    <div class="timeline-step-num">Step 5</div>
-                    <div class="timeline-step-title">Run TF-IDF Domain Mismatch Detector</div>
-                    <div class="timeline-step-desc">Identify profiles where the candidate's headline and career history diverge.</div>
-                    <div class="timeline-step-tech-info" style="display: block;">
-                        Fits a data-driven TF-IDF vectorizer over the pooled candidate text profiles, analyzing vocabulary coherence to catch fraud/mismatched domains.
-                    </div>
-                    <div class="timeline-step-log" id="log-5">Pending</div>
-                </div>
-            </div>
-
-            <!-- Step 6 -->
-            <div class="timeline-item" id="step-6">
-                <div class="timeline-badge status-pending" id="badge-6"></div>
-                <div class="timeline-content">
-                    <div class="timeline-step-num">Step 6</div>
-                    <div class="timeline-step-title">Screen & Pre-rank (Non-Semantic Score)</div>
-                    <div class="timeline-step-desc">Evaluate candidates by experience curves, location hub scores, notice periods, and redrob trust signals.</div>
-                    <div class="timeline-step-tech-info" style="display: block;">
-                        Computes non-semantic composite scores dynamically scaled to the parsed JD requirements. Shortlists the top 2000 profiles for the deep semantic stage.
-                    </div>
-                    <div class="timeline-step-log" id="log-6">Pending</div>
-                </div>
-            </div>
-
-            <!-- Step 7 -->
-            <div class="timeline-item" id="step-7">
-                <div class="timeline-badge status-pending" id="badge-7"></div>
-                <div class="timeline-content">
-                    <div class="timeline-step-num">Step 7</div>
-                    <div class="timeline-step-title">Encode Semantic Vectors for Shortlisted Candidates</div>
-                    <div class="timeline-step-desc">Extract candidate text profiles and encode their dense vectors.</div>
-                    <div class="timeline-step-tech-info" style="display: block;">
-                        Extracts candidate headline, skills, and roles, truncating to 600 characters for high-performance batched SentenceTransformer encoding.
-                    </div>
-                    <div class="timeline-step-log" id="log-7">Pending</div>
-                </div>
-            </div>
-
-            <!-- Step 8 -->
-            <div class="timeline-item" id="step-8">
-                <div class="timeline-badge status-pending" id="badge-8"></div>
-                <div class="timeline-content">
-                    <div class="timeline-step-num">Step 8</div>
-                    <div class="timeline-step-title">Compute Hybrid Scoring & Select Top 100</div>
-                    <div class="timeline-step-desc">Calculate cosine similarities and combine semantic and heuristic scoring dimensions.</div>
-                    <div class="timeline-step-tech-info" style="display: block;">
-                        Executes vectorized matrix cosine similarity computation. Hybrid formula: 0.45 * semantic + 0.55 * non-semantic composite.
-                    </div>
-                    <div class="timeline-step-log" id="log-8">Pending</div>
-                </div>
-            </div>
-
-            <!-- Step 9 -->
-            <div class="timeline-item" id="step-9">
-                <div class="timeline-badge status-pending" id="badge-9"></div>
-                <div class="timeline-content">
-                    <div class="timeline-step-num">Step 9</div>
-                    <div class="timeline-step-title">Generate Grounded Reasoning Justifications</div>
-                    <div class="timeline-step-desc">Generate concise reasons justifying the final rank of the top 100 profiles.</div>
-                    <div class="timeline-step-tech-info" style="display: block;">
-                        Examines matching required and preferred skills, comparing them with years of experience to output customized, grounded reasoning sentences.
-                    </div>
-                    <div class="timeline-step-log" id="log-9">Pending</div>
-                </div>
-            </div>
+            <div class="timeline-item" id="step-1"><div class="timeline-badge status-pending" id="badge-1"></div><div class="timeline-content"><div class="timeline-step-num">Step 1</div><div class="timeline-step-title">Load ML Models</div><div class="timeline-step-desc">Initialize SentenceTransformer & Flan-T5 from cache.</div><div class="timeline-step-log" id="log-1">Pending</div></div></div>
+            <div class="timeline-item" id="step-2"><div class="timeline-badge status-pending" id="badge-2"></div><div class="timeline-content"><div class="timeline-step-num">Step 2</div><div class="timeline-step-title">Parse JD Criteria</div><div class="timeline-step-desc">Extract required skills, experience, and location constraints.</div><div class="timeline-step-log" id="log-2">Pending</div></div></div>
+            <div class="timeline-item" id="step-3"><div class="timeline-badge status-pending" id="badge-3"></div><div class="timeline-content"><div class="timeline-step-num">Step 3</div><div class="timeline-step-title">Generate JD Embedding</div><div class="timeline-step-desc">Encode job description into high-dimensional vector space.</div><div class="timeline-step-log" id="log-3">Pending</div></div></div>
+            <div class="timeline-item" id="step-4"><div class="timeline-badge status-pending" id="badge-4"></div><div class="timeline-content"><div class="timeline-step-num">Step 4</div><div class="timeline-step-title">Stream & Hard Filters</div><div class="timeline-step-desc">Validate schemas and drop profiles triggering heuristic honeypots.</div><div class="timeline-step-log" id="log-4">Pending</div></div></div>
+            <div class="timeline-item" id="step-5"><div class="timeline-badge status-pending" id="badge-5"></div><div class="timeline-content"><div class="timeline-step-num">Step 5</div><div class="timeline-step-title">TF-IDF Mismatch Detection</div><div class="timeline-step-desc">Filter domains where headline contradicts career history.</div><div class="timeline-step-log" id="log-5">Pending</div></div></div>
+            <div class="timeline-item" id="step-6"><div class="timeline-badge status-pending" id="badge-6"></div><div class="timeline-content"><div class="timeline-step-num">Step 6</div><div class="timeline-step-title">Heuristic Pre-rank</div><div class="timeline-step-desc">Score dynamically against JD metrics and shortlist top 2000.</div><div class="timeline-step-log" id="log-6">Pending</div></div></div>
+            <div class="timeline-item" id="step-7"><div class="timeline-badge status-pending" id="badge-7"></div><div class="timeline-content"><div class="timeline-step-num">Step 7</div><div class="timeline-step-title">Encode Semantic Vectors</div><div class="timeline-step-desc">Extract text from shortlisted profiles and batch-encode dense vectors.</div><div class="timeline-step-log" id="log-7">Pending</div></div></div>
+            <div class="timeline-item" id="step-8"><div class="timeline-badge status-pending" id="badge-8"></div><div class="timeline-content"><div class="timeline-step-num">Step 8</div><div class="timeline-step-title">Hybrid Scoring</div><div class="timeline-step-desc">Compute cosine similarities + combined non-semantic scoring formula.</div><div class="timeline-step-log" id="log-8">Pending</div></div></div>
+            <div class="timeline-item" id="step-9"><div class="timeline-badge status-pending" id="badge-9"></div><div class="timeline-content"><div class="timeline-step-num">Step 9</div><div class="timeline-step-title">Generate Grounded Reasoning</div><div class="timeline-step-desc">Output explanatory text justifying the rank placement.</div><div class="timeline-step-log" id="log-9">Pending</div></div></div>
         </div>
         <div class="time-elapsed" id="time-elapsed">Elapsed: 0.0s</div>
     </div>
@@ -623,190 +286,150 @@
     <div class="metrics-container" id="metrics-container">
         <div class="metric-card">
             <div class="metric-val" id="metric-total">0</div>
-            <div class="metric-lbl">Total Input</div>
+            <div class="metric-lbl">Total Profiles</div>
+            <div class="metric-sub" style="color:var(--text-muted)">100%</div>
         </div>
         <div class="metric-card">
             <div class="metric-val" id="metric-filtered">0</div>
-            <div class="metric-lbl">Filters Applied</div>
+            <div class="metric-lbl">Hard Filtered</div>
+            <div class="metric-sub" id="metric-filtered-pct" style="color:var(--warning)">0%</div>
         </div>
         <div class="metric-card">
             <div class="metric-val" id="metric-mismatched">0</div>
             <div class="metric-lbl">Domain Mismatches</div>
+            <div class="metric-sub" id="metric-mismatch-pct" style="color:var(--warning)">0%</div>
         </div>
         <div class="metric-card">
-            <div class="metric-val" id="metric-ranked">0</div>
-            <div class="metric-lbl">Ranked Profiles</div>
+            <div class="metric-val" id="metric-pre">2,000</div>
+            <div class="metric-lbl">Deep Encoded</div>
+            <div class="metric-sub" style="color:var(--primary)">Shortlist Limit</div>
+        </div>
+        <div class="metric-card">
+            <div class="metric-val" id="metric-ranked" style="color:var(--success)">0</div>
+            <div class="metric-lbl">Final Output</div>
+            <div class="metric-sub">Top 100 Delivered</div>
         </div>
     </div>
 
-    <!-- Results Panel -->
+    <!-- Results -->
     <div class="results-panel" id="results-panel">
-        <!-- Results Table Card -->
         <div class="card table-card">
             <div class="table-header-row">
-                <h2>Top Ranked Candidates</h2>
-                <a href="#" class="btn-download" id="btn-download" download="submission.csv">Download submission.csv</a>
+                <h2>Leaderboard (Top 100)</h2>
+                <a href="#" class="btn-download" id="btn-download" download="submission.csv">Download CSV</a>
             </div>
             <div class="table-container">
                 <table id="results-table">
                     <thead>
                         <tr>
-                            <th style="width: 12%">Rank</th>
-                            <th style="width: 28%">Candidate ID</th>
-                            <th style="width: 20%">Score</th>
-                            <th style="width: 40%">Reasoning</th>
+                            <th style="width:10%">Rnk</th>
+                            <th style="width:25%">ID</th>
+                            <th style="width:15%">Score</th>
+                            <th style="width:50%">Reasoning Segment</th>
                         </tr>
                     </thead>
-                    <tbody id="results-tbody">
-                        <!-- Filled dynamically -->
-                    </tbody>
+                    <tbody id="results-tbody"></tbody>
                 </table>
             </div>
         </div>
 
-        <!-- Cross-Verification Inspector Card -->
         <div class="card inspector-card">
-            <h2>Cross-Verify Candidate Details</h2>
+            <h2>Candidate Scorecard</h2>
             <div class="inspector-placeholder" id="inspector-placeholder">
-                Select a candidate from the table to view their complete raw profile.
+                Select a candidate from the leaderboard to view deep analysis.
             </div>
             <div class="inspector-content" id="inspector-content">
-                <div class="cand-info-header">
-                    <div class="cand-info-title" id="inspector-id">CAND_0000000</div>
-                    <div class="cand-info-subtitle" id="inspector-reason">Reasoning summary placeholder</div>
+                <div class="scorecard-header">
+                    <div class="sc-id" id="sc-id">CAND_000</div>
+                    <div class="sc-title" id="sc-title">Title</div>
+                    <div class="sc-badges">
+                        <span class="badge highlight" id="sc-yoe">0 YOE</span>
+                        <span class="badge" id="sc-loc">📍 Location</span>
+                        <span class="badge trust" id="sc-otw" style="display:none;">🟢 Open to Work</span>
+                        <span class="badge trust" id="sc-rel" style="display:none;">✈️ Relocate OK</span>
+                    </div>
                 </div>
-                <pre><code id="inspector-json">JSON code will appear here.</code></pre>
+
+                <div class="sc-section-title">Model Justification</div>
+                <div class="sc-reasoning-box" id="sc-reason"></div>
+
+                <div class="sc-section-title">Extracted Skills</div>
+                <div class="sc-skills" id="sc-skills-container"></div>
+
+                <button class="json-toggle" onclick="document.getElementById('inspector-json').style.display = document.getElementById('inspector-json').style.display === 'block' ? 'none' : 'block'">
+                    <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"></path></svg> View Raw Profile JSON
+                </button>
+                <pre id="inspector-json"></pre>
             </div>
         </div>
     </div>
 </div>
 
 <script>
-    // State
     let jdFile = null;
     let candidatesFile = null;
     let rawProfiles = {};
     let timerInterval = null;
     let startTime = null;
 
-    // Elements
     const jdFileInput = document.getElementById('jd-file');
     const candidatesFileInput = document.getElementById('candidates-file');
-    const jdInfo = document.getElementById('jd-file-info');
-    const candidatesInfo = document.getElementById('candidates-file-info');
     const btnRun = document.getElementById('btn-run');
-    
-    const jdDropzone = document.getElementById('jd-dropzone');
-    const candidatesDropzone = document.getElementById('candidates-dropzone');
 
-    const flowContainer = document.getElementById('flow-container');
-    const metricsContainer = document.getElementById('metrics-container');
-    const resultsPanel = document.getElementById('results-panel');
-    const timeElapsed = document.getElementById('time-elapsed');
-
-    // Drag and Drop implementation
-    function setupDragAndDrop(dropzone, input, infoCallback) {
-        ['dragenter', 'dragover'].forEach(eventName => {
-            dropzone.addEventListener(eventName, (e) => {
-                e.preventDefault();
-                dropzone.classList.add('dragover');
-            }, false);
-        });
-
-        ['dragleave', 'drop'].forEach(eventName => {
-            dropzone.addEventListener(eventName, (e) => {
-                e.preventDefault();
-                dropzone.classList.remove('dragover');
-            }, false);
-        });
-
-        dropzone.addEventListener('drop', (e) => {
-            const dt = e.dataTransfer;
-            const files = dt.files;
-            if (files.length) {
-                input.files = files;
-                infoCallback(files[0]);
+    function setupDragDrop(zoneId, inputEl, infoId) {
+        const dropzone = document.getElementById(zoneId);
+        const infoEl = document.getElementById(infoId);
+        
+        ['dragenter', 'dragover'].forEach(ev => dropzone.addEventListener(ev, e => { e.preventDefault(); dropzone.classList.add('dragover'); }));
+        ['dragleave', 'drop'].forEach(ev => dropzone.addEventListener(ev, e => { e.preventDefault(); dropzone.classList.remove('dragover'); }));
+        dropzone.addEventListener('drop', e => {
+            if(e.dataTransfer.files.length) {
+                inputEl.files = e.dataTransfer.files;
+                handleFile(e.dataTransfer.files[0], infoEl, zoneId === 'jd-dropzone');
             }
         });
+        inputEl.addEventListener('change', e => {
+            if(e.target.files.length) handleFile(e.target.files[0], infoEl, zoneId === 'jd-dropzone');
+        });
     }
 
-    function updateJdFileInfo(file) {
-        jdFile = file;
-        jdInfo.textContent = `Selected file: ${file.name}`;
-        jdInfo.style.display = 'block';
-        checkReady();
+    function handleFile(file, infoEl, isJd) {
+        if(isJd) jdFile = file; else candidatesFile = file;
+        infoEl.textContent = `✓ ${file.name}`;
+        infoEl.style.display = 'inline-block';
+        btnRun.disabled = !(jdFile && candidatesFile);
     }
 
-    function updateCandidatesFileInfo(file) {
-        candidatesFile = file;
-        candidatesInfo.textContent = `Selected file: ${file.name}`;
-        candidatesInfo.style.display = 'block';
-        checkReady();
-    }
+    setupDragDrop('jd-dropzone', jdFileInput, 'jd-file-info');
+    setupDragDrop('candidates-dropzone', candidatesFileInput, 'candidates-file-info');
 
-    setupDragAndDrop(jdDropzone, jdFileInput, updateJdFileInfo);
-    setupDragAndDrop(candidatesDropzone, candidatesFileInput, updateCandidatesFileInfo);
-
-    jdFileInput.addEventListener('change', (e) => {
-        if (e.target.files.length) updateJdFileInfo(e.target.files[0]);
-    });
-
-    candidatesFileInput.addEventListener('change', (e) => {
-        if (e.target.files.length) updateCandidatesFileInfo(e.target.files[0]);
-    });
-
-    function checkReady() {
-        if (jdFile && candidatesFile) {
-            btnRun.removeAttribute('disabled');
-        } else {
-            btnRun.setAttribute('disabled', 'true');
-        }
-    }
-
-    // Run Pipeline
     btnRun.addEventListener('click', async () => {
-        if (!jdFile || !candidatesFile) return;
+        if(!jdFile || !candidatesFile) return;
 
-        // Reset display states
-        flowContainer.style.display = 'block';
-        metricsContainer.style.display = 'none';
-        resultsPanel.style.display = 'none';
+        document.getElementById('flow-container').style.display = 'block';
+        document.getElementById('metrics-container').style.display = 'none';
+        document.getElementById('results-panel').style.display = 'none';
         
-        // Reset steps classes
         for (let i = 1; i <= 9; i++) {
-            const badgeEl = document.getElementById(`badge-${i}`);
+            document.getElementById(`badge-${i}`).className = 'timeline-badge status-pending';
             const logEl = document.getElementById(`log-${i}`);
-            
-            badgeEl.className = 'timeline-badge status-pending';
-            logEl.textContent = 'Pending';
-            logEl.style.display = 'none';
+            logEl.textContent = 'Pending'; logEl.style.display = 'none';
         }
 
-        // Start timer
         startTime = Date.now();
-        timeElapsed.textContent = "Elapsed: 0.0s";
         clearInterval(timerInterval);
         timerInterval = setInterval(() => {
-            const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
-            timeElapsed.textContent = `Elapsed: ${elapsed}s`;
+            document.getElementById('time-elapsed').textContent = `Elapsed: ${((Date.now() - startTime) / 1000).toFixed(1)}s`;
         }, 100);
 
-        // Prepare request
         const formData = new FormData();
         formData.append('jd_file', jdFile);
         formData.append('candidates_file', candidatesFile);
 
         try {
-            const response = await fetch('/rank', {
-                method: 'POST',
-                body: formData
-            });
-
-            if (!response.ok) {
-                const text = await response.text();
-                throw new Error(text || "Internal Server Error");
-            }
-
+            const response = await fetch('/rank', { method: 'POST', body: formData });
+            if (!response.ok) throw new Error(await response.text());
+            
             const reader = response.body.getReader();
             const decoder = new TextDecoder();
             let buffer = "";
@@ -814,127 +437,112 @@
             while (true) {
                 const { value, done } = await reader.read();
                 if (done) break;
-
                 buffer += decoder.decode(value, { stream: true });
                 const lines = buffer.split('\n');
-                
-                // Keep the last partial line in the buffer
                 buffer = lines.pop();
-
                 for (const line of lines) {
-                    if (line.trim()) {
-                        const data = JSON.parse(line);
-                        handleStreamUpdate(data);
-                    }
+                    if (line.trim()) handleStreamUpdate(JSON.parse(line));
                 }
             }
         } catch (err) {
             clearInterval(timerInterval);
-            alert(`Pipeline execution error: ${err.message}`);
+            alert(`Error: ${err.message}`);
         }
     });
 
     function handleStreamUpdate(data) {
         if (data.status === 'error') {
-            clearInterval(timerInterval);
-            alert(`Error: ${data.message}`);
-            return;
+            clearInterval(timerInterval); alert(data.message); return;
         }
 
         if (data.step) {
-            const stepId = data.step;
-            const badgeEl = document.getElementById(`badge-${stepId}`);
-            const logEl = document.getElementById(`log-${stepId}`);
-            
+            const b = document.getElementById(`badge-${data.step}`);
+            const l = document.getElementById(`log-${data.step}`);
             if (data.status === 'running') {
-                badgeEl.className = 'timeline-badge status-running';
-                logEl.textContent = data.message;
-                logEl.style.color = 'var(--running)';
-                logEl.style.display = 'block';
+                b.className = 'timeline-badge status-running';
+                l.textContent = data.message; l.style.display = 'block';
             } else if (data.status === 'success') {
-                badgeEl.className = 'timeline-badge status-success';
-                logEl.textContent = data.message;
-                logEl.style.color = 'var(--success)';
-                logEl.style.display = 'block';
+                b.className = 'timeline-badge status-success';
+                l.textContent = data.message;
             }
         }
 
         if (data.status === 'completed') {
             clearInterval(timerInterval);
-            
-            // Format elapsed
-            timeElapsed.textContent = `Completed in ${data.elapsed}s`;
+            document.getElementById('time-elapsed').textContent = `Completed in ${data.elapsed}s`;
 
-            // Set Metrics
-            document.getElementById('metric-total').textContent = data.metrics.total_input;
-            document.getElementById('metric-filtered').textContent = data.metrics.invalid + data.metrics.filtered;
-            document.getElementById('metric-mismatched').textContent = data.metrics.mismatched;
+            const t = data.metrics.total_input || 1;
+            const filt = data.metrics.invalid + data.metrics.filtered;
+            const mism = data.metrics.mismatched;
+
+            document.getElementById('metric-total').textContent = t.toLocaleString();
+            document.getElementById('metric-filtered').textContent = filt.toLocaleString();
+            document.getElementById('metric-filtered-pct').textContent = `-${((filt/t)*100).toFixed(1)}% drop`;
+            document.getElementById('metric-mismatched').textContent = mism.toLocaleString();
+            document.getElementById('metric-mismatch-pct').textContent = `-${((mism/t)*100).toFixed(1)}% drop`;
             document.getElementById('metric-ranked').textContent = data.metrics.ranked;
-            metricsContainer.style.display = 'grid';
+            
+            document.getElementById('metrics-container').style.display = 'grid';
 
-            // Store raw profiles for inspector
             rawProfiles = data.raw_profiles;
-
-            // Fill Table
             const tbody = document.getElementById('results-tbody');
             tbody.innerHTML = '';
             
             data.results.forEach(res => {
                 const tr = document.createElement('tr');
-                tr.dataset.id = res.candidate_id;
                 tr.innerHTML = `
-                    <td class="col-rank">${res.rank}</td>
+                    <td class="col-rank">#${res.rank}</td>
                     <td class="col-id">${res.candidate_id}</td>
                     <td class="col-score">${res.score.toFixed(4)}</td>
                     <td class="col-reason">${res.reasoning}</td>
                 `;
-                
-                tr.addEventListener('click', () => selectCandidate(res.candidate_id, tr));
+                tr.addEventListener('click', () => selectCandidate(res.candidate_id, tr, res.reasoning));
                 tbody.appendChild(tr);
             });
 
-            // Set Download button
             const blob = new Blob([data.csv_data], { type: 'text/csv' });
-            const url = URL.createObjectURL(blob);
-            const btnDownload = document.getElementById('btn-download');
-            btnDownload.href = url;
-
-            resultsPanel.style.display = 'grid';
+            document.getElementById('btn-download').href = URL.createObjectURL(blob);
+            document.getElementById('results-panel').style.display = 'grid';
         }
     }
 
-    function selectCandidate(candidateId, trElement) {
-        // Clear previous selected class
-        const rows = document.querySelectorAll('#results-tbody tr');
-        rows.forEach(r => r.classList.remove('selected'));
-        
-        // Add selected class to current row
-        trElement.classList.add('selected');
+    function selectCandidate(id, trEl, reasoning) {
+        document.querySelectorAll('#results-tbody tr').forEach(r => r.classList.remove('selected'));
+        trEl.classList.add('selected');
 
-        const profile = rawProfiles[candidateId];
+        const profile = rawProfiles[id];
         if (profile) {
             document.getElementById('inspector-placeholder').style.display = 'none';
-            const contentEl = document.getElementById('inspector-content');
-            contentEl.style.display = 'block';
+            document.getElementById('inspector-content').style.display = 'block';
+            
+            const p = profile.profile || {};
+            const sig = profile.redrob_signals || {};
+            
+            document.getElementById('sc-id').textContent = id;
+            document.getElementById('sc-title').textContent = p.current_title || p.headline || "Unknown Title";
+            document.getElementById('sc-yoe').textContent = `${p.years_of_experience || 0} YOE`;
+            document.getElementById('sc-loc').textContent = `📍 ${p.location || "Remote"}`;
+            
+            document.getElementById('sc-otw').style.display = sig.open_to_work_flag ? 'inline-flex' : 'none';
+            document.getElementById('sc-rel').style.display = sig.willing_to_relocate ? 'inline-flex' : 'none';
+            
+            document.getElementById('sc-reason').textContent = reasoning;
+            
+            const skillsDiv = document.getElementById('sc-skills-container');
+            skillsDiv.innerHTML = '';
+            (profile.skills || []).slice(0, 15).forEach(s => {
+                if(s.name) {
+                    const span = document.createElement('span');
+                    span.className = 'skill-pill';
+                    span.textContent = s.name;
+                    skillsDiv.appendChild(span);
+                }
+            });
 
-            document.getElementById('inspector-id').textContent = candidateId;
-            
-            // Find reasoning
-            const scoreRow = document.querySelector(`tr.selected`);
-            const cells = scoreRow.querySelectorAll('td');
-            const reasoning = cells[3].textContent;
-            document.getElementById('inspector-reason').textContent = reasoning;
-            
-            // Output raw candidate profile without our transient UI attributes
-            const cleanProfile = {...profile};
-            delete cleanProfile.reasoning;
-            delete cleanProfile.score;
-            delete cleanProfile.profile_details;
-            
-            document.getElementById('inspector-json').textContent = JSON.stringify(cleanProfile, null, 2);
+            document.getElementById('inspector-json').textContent = JSON.stringify(profile, null, 2);
+            document.getElementById('inspector-json').style.display = 'none';
         }
     }
 </script>
-
 </body>
 </html>
