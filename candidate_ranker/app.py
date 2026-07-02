@@ -12,7 +12,7 @@ import docx
 
 import config
 from src.embeddings import get_sentence_embeddings
-from src.heuristics import MismatchDetector, check_honeypots_and_filters, compute_soft_penalty
+from src.heuristics import MismatchDetector, check_honeypots_and_filters, compute_soft_penalty, is_location_disqualified
 from src.jd_parser import JDParser
 from src.schema_validator import validate_candidate
 from src.scoring import compute_non_semantic_score
@@ -69,7 +69,10 @@ def stream_candidates_from_bytes(file_bytes, filename):
 @app.get("/", response_class=HTMLResponse)
 async def serve_index():
     """Serves the index html file for the UI."""
-    with open("static/index.html", "r", encoding="utf-8") as f:
+    import os
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    index_path = os.path.join(base_dir, "static", "index.html")
+    with open(index_path, "r", encoding="utf-8") as f:
         return f.read()
 
 async def run_ranking_pipeline_generator(jd_bytes, jd_name, candidates_bytes, candidates_name):
@@ -109,6 +112,9 @@ async def run_ranking_pipeline_generator(jd_bytes, jd_name, candidates_bytes, ca
                 invalid_count += 1
                 continue
             if check_honeypots_and_filters(cand):
+                filtered_count += 1
+                continue
+            if is_location_disqualified(cand, jd_profile):
                 filtered_count += 1
                 continue
             valid_candidates.append(cand)

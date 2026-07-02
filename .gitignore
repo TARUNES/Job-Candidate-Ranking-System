@@ -1,7 +1,5 @@
 # Challenge Data
 __MACOSX/
-[PUB] India_runs_data_and_ai_challenge/
-*.jsonl
 
 # Output
 candidate_ranker/output/
@@ -28,3 +26,8 @@ pip-delete-this-directory.txt
 *.njsproj
 *.sln
 *.swp
+
+# Challenge Dataset and Large Files
+*[PUB]*
+*.jsonl
+*.jsonl.gz

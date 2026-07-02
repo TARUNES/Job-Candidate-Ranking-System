@@ -104,33 +104,57 @@ def calculate_location_score(
     remote_ok: bool = False,
 ) -> float:
     """
-    Maps a candidate's location and mobility preferences to a [0.35, 1.0] score.
+    Maps a candidate's location and mobility preferences to a [0.0, 1.0] score.
 
     Tiers:
-      1.0   — Already in a JD-preferred location (case-insensitive substring match).
-      0.60  — Outside preferred locations but willing to relocate,
-               OR JD accepts remote/hybrid AND candidate's preferred_work_mode is remote/hybrid/flexible.
-      0.35  — International, onsite-only, unwilling to relocate.
-               Floor raised from 0.2 to 0.35 to avoid near-eliminating candidates
-               who may be exceptional on other dimensions.
+      1.0   — Already in a JD-preferred city (case-insensitive substring match).
+      0.60  — Outside preferred cities but willing to relocate and currently in a Tier-1 Indian city.
+      0.00  — Otherwise.
     """
     preferred = preferred_locations or []
     location_lower = location.lower()
 
-    # Check if candidate is already in a preferred location
-    for hub in preferred:
+    # Filter out countries from preferred location matches to avoid false matches (e.g. "India")
+    _COUNTRIES = {"india", "usa", "uk", "united states", "united kingdom", "germany", "canada", "australia"}
+    preferred_cities = [hub for hub in preferred if hub.lower() not in _COUNTRIES]
+
+    # Check if candidate is already in a preferred city
+    for hub in preferred_cities:
         if hub.lower() in location_lower:
             return 1.0
 
     willing_to_relocate: bool = signals.get("willing_to_relocate", False)
-    work_mode: str = signals.get("preferred_work_mode", "onsite").lower()
-    remote_compatible = work_mode in ("remote", "hybrid", "flexible")
 
-    if willing_to_relocate or (remote_ok and remote_compatible):
-        log.debug("location_score('%s') = 0.60 (mobile/remote)", location)
-        return 0.60
+    if willing_to_relocate:
+        # Check if this is an India-based job to determine if Tier-1 Indian city constraint applies
+        is_india_job = any(loc.lower() == "india" for loc in preferred)
+        INDIAN_CITIES = {
+            "bangalore", "bengaluru", "mumbai", "delhi", "ncr", "noida", "gurgaon", "gurugram", "hyderabad", "chennai", "pune", "kolkata",
+            "ahmedabad", "jaipur", "indore", "bhopal", "nagpur", "surat", "vadodara", "coimbatore", "kochi", "cochin", "trivandrum", 
+            "thiruvananthapuram", "chandigarh", "lucknow", "kanpur", "patna", "bhubaneswar", "vizag", "visakhapatnam", "mangalore", 
+            "mysore", "mysuru", "rajkot", "nashik", "aurangabad"
+        }
+        if not is_india_job:
+            is_india_job = any(city.lower() in INDIAN_CITIES for city in preferred_cities)
 
-    log.debug("location_score('%s') = 0.00 (non-preferred, unwilling to relocate)", location)
+        if is_india_job:
+            TIER_1_INDIAN_CITIES = {
+                "bangalore", "bengaluru", "mumbai", "delhi", "ncr", "noida", 
+                "gurgaon", "gurugram", "hyderabad", "chennai", "pune", "kolkata"
+            }
+            from_tier_1 = False
+            for t1_city in TIER_1_INDIAN_CITIES:
+                if t1_city in location_lower:
+                    from_tier_1 = True
+                    break
+            if from_tier_1:
+                log.debug("location_score('%s') = 0.60 (mobile from Tier-1)", location)
+                return 0.60
+        else:
+            log.debug("location_score('%s') = 0.60 (mobile relocation)", location)
+            return 0.60
+
+    log.debug("location_score('%s') = 0.00 (non-preferred, ineligible relocation)", location)
     return 0.0
 
 

@@ -10,10 +10,55 @@ This repository contains the candidate ranking pipeline developed for the Redrob
 
 ## Execution and Setup
 
-To run, test, or build the Docker sandbox, navigate to the `candidate_ranker` folder:
+You can run the pipeline or the Docker sandbox directly from the repository root (no directory change required).
 
+### 1. Generate the Output CSV (CLI Pipeline)
+
+Using **Poetry**:
 ```bash
-cd candidate_ranker
+# Install dependencies
+poetry install --directory candidate_ranker
+
+# Run the pipeline (single command)
+poetry run --directory candidate_ranker python rank.py --candidates "../[PUB] India_runs_data_and_ai_challenge/India_runs_data_and_ai_challenge/candidates.jsonl" --jd "../[PUB] India_runs_data_and_ai_challenge/India_runs_data_and_ai_challenge/job_description.docx" --out submission.csv
 ```
 
-Please refer to [candidate_ranker/README.md](file:///c:/D/Projects/Job-Candidate-Ranking-System/candidate_ranker/README.md) for the complete instructions on local execution, Docker container setup, design decisions, and scoring weights.
+Using **pip**:
+```bash
+# Install dependencies
+pip install -r candidate_ranker/requirements.txt
+
+# Run the pipeline (single command)
+python candidate_ranker/rank.py --candidates "[PUB] India_runs_data_and_ai_challenge/India_runs_data_and_ai_challenge/candidates.jsonl" --jd "[PUB] India_runs_data_and_ai_challenge/India_runs_data_and_ai_challenge/job_description.docx" --out candidate_ranker/submission.csv
+```
+
+### 2. Run the Interactive Web UI (Locally)
+
+Using **Poetry**:
+```bash
+poetry run --directory candidate_ranker python app.py
+```
+
+Using **pip**:
+```bash
+python candidate_ranker/app.py
+```
+
+Once started, access the UI at `http://localhost:8501`.
+
+### 3. Run with Docker (FastAPI Web UI Sandbox)
+
+Using **Docker Compose**:
+```bash
+docker compose -f candidate_ranker/docker-compose.yml up -d --build
+```
+
+Using **Docker CLI**:
+```bash
+docker build -t candidate-ranker-sandbox:latest candidate_ranker
+docker run -d -p 8501:8501 --name candidate_ranker_sandbox candidate-ranker-sandbox:latest
+```
+
+Once running, access the interactive web sandbox at `http://localhost:8501`.
+
+Please refer to [candidate_ranker/README.md](file:///c:/D/Projects/Job-Candidate-Ranking-System/candidate_ranker/README.md) for more details on local execution, Docker container setup, design decisions, and scoring weights.

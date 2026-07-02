@@ -14,7 +14,7 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 import config
 from src.data_loader import load_docx_text, stream_candidates
 from src.embeddings import get_sentence_embeddings
-from src.heuristics import MismatchDetector, check_honeypots_and_filters, compute_soft_penalty
+from src.heuristics import MismatchDetector, check_honeypots_and_filters, compute_soft_penalty, is_location_disqualified
 from src.jd_parser import JDParser, JDProfile
 from src.schema_validator import validate_candidate
 from src.scoring import compute_non_semantic_score
@@ -217,6 +217,10 @@ def main() -> None:
             continue
 
         if check_honeypots_and_filters(cand):
+            filtered_count += 1
+            continue
+
+        if is_location_disqualified(cand, jd_profile):
             filtered_count += 1
             continue
 

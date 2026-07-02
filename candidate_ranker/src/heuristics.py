@@ -316,3 +316,70 @@ def compute_soft_penalty(candidate: dict[str, Any]) -> float:
     if reasons:
         log.debug("[PENALTY] %s — mult=%.2f reasons=%s", cid, multiplier, reasons)
     return multiplier
+
+
+def is_location_disqualified(candidate: dict[str, Any], jd_profile: Any) -> bool:
+    """
+    Filters out candidates who do not satisfy the location constraints of the JD.
+
+    Constraints:
+      - Candidate must be in a preferred city (e.g. Pune/Noida), OR
+      - Candidate must be willing to relocate AND currently located in a Tier-1 Indian city.
+    """
+    if jd_profile is None:
+        return False
+
+    profile = candidate.get("profile", {})
+    location = profile.get("location", "")
+    if not location:
+        return True
+
+    location_lower = location.lower()
+    preferred = jd_profile.preferred_locations or []
+    
+    _COUNTRIES = {"india", "usa", "uk", "united states", "united kingdom", "germany", "canada", "australia"}
+    preferred_cities = [hub for hub in preferred if hub.lower() not in _COUNTRIES]
+
+    # Check if candidate is already in a preferred city
+    in_preferred_city = False
+    for city in preferred_cities:
+        if city.lower() in location_lower:
+            in_preferred_city = True
+            break
+
+    if in_preferred_city:
+        return False
+
+    # Not in a preferred city: must be willing to relocate
+    signals = candidate.get("redrob_signals", {})
+    willing_to_relocate = signals.get("willing_to_relocate", False)
+    if not willing_to_relocate:
+        log.info("[FILTER] %s — location mismatch (not in preferred city and unwilling to relocate)", candidate.get("candidate_id", "?"))
+        return True
+
+    # Check if this is an India-based job to determine if Tier-1 Indian city constraint applies
+    is_india_job = any(loc.lower() == "india" for loc in preferred)
+    INDIAN_CITIES = {
+        "bangalore", "bengaluru", "mumbai", "delhi", "ncr", "noida", "gurgaon", "gurugram", "hyderabad", "chennai", "pune", "kolkata",
+        "ahmedabad", "jaipur", "indore", "bhopal", "nagpur", "surat", "vadodara", "coimbatore", "kochi", "cochin", "trivandrum", 
+        "thiruvananthapuram", "chandigarh", "lucknow", "kanpur", "patna", "bhubaneswar", "vizag", "visakhapatnam", "mangalore", 
+        "mysore", "mysuru", "rajkot", "nashik", "aurangabad"
+    }
+    if not is_india_job:
+        is_india_job = any(city.lower() in INDIAN_CITIES for city in preferred_cities)
+
+    if is_india_job:
+        TIER_1_INDIAN_CITIES = {
+            "bangalore", "bengaluru", "mumbai", "delhi", "ncr", "noida", 
+            "gurgaon", "gurugram", "hyderabad", "chennai", "pune", "kolkata"
+        }
+        from_tier_1 = False
+        for t1_city in TIER_1_INDIAN_CITIES:
+            if t1_city in location_lower:
+                from_tier_1 = True
+                break
+        if not from_tier_1:
+            log.info("[FILTER] %s — location mismatch (willing to relocate, but currently in non-Tier-1 city: %s)", candidate.get("candidate_id", "?"), location)
+            return True
+
+    return False
