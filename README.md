@@ -10,6 +10,9 @@ This repository contains the candidate ranking pipeline developed for the Redrob
 
 ## Execution and Setup
 
+> [!IMPORTANT]
+> The `[PUB] India_runs_data_and_ai_challenge/` folder containing the official dataset (`candidates.jsonl` and `job_description.docx`) is **not included in this Git repository** due to its large size (460+ MB). You must manually copy the `[PUB] India_runs_data_and_ai_challenge/` directory into the project root folder before running the commands.
+
 You can run the pipeline or the Docker sandbox directly from the repository root (no directory change required).
 
 ### 1. Generate the Output CSV (CLI Pipeline)
